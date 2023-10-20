@@ -295,9 +295,9 @@ int main(void) {
   
   FILE* f = fopen("config", "r");
 
-  printf("Enter mode:\n");  
+  printf("Enter mode/target:\n");  
   scanf("%s", input);
-  if (strcmp(input, "phone")==0) {
+  if (strcmp(input, "pi")==0) {
     while (peer_address.ip[0] == 0 || peer_address.port[0] == 0) {
       fscanf(f, "%s %s", input, input2);
       if (strcmp(input, "pi_ip:") == 0) {
@@ -310,7 +310,7 @@ int main(void) {
     printf("Sending file to %s:%s\n", peer_address.ip, peer_address.port);
     transfer_file(peer_address, "files/tinyfile.txt");
   } 
-  else if (strcmp(input, "pi")==0) {
+  else if (strcmp(input, "desktop")==0) {
     while (peer_address.ip[0] == 0 || peer_address.port[0] == 0) {
       fscanf(f, "%s %s", input, input2);
       if (strcmp(input, "desktop_ip:") == 0) {
@@ -320,9 +320,25 @@ int main(void) {
         strcpy(peer_address.port, input2); 
       }
     }
+
     printf("Sending file to %s:%s\n", peer_address.ip, peer_address.port);
     transfer_file(peer_address, "files/tinyfile.txt");
   }
+
+  else if (strcmp(input, "phone")==0) {
+    while (peer_address.ip[0] == 0 || peer_address.port[0] == 0) {
+      fscanf(f, "%s %s", input, input2);
+      if (strcmp(input, "phone_ip:") == 0) {
+        strcpy(peer_address.ip, input2); 
+      }
+      if (strcmp(input, "phone_port:") == 0) {
+        strcpy(peer_address.port, input2); 
+      }
+    }
+    printf("Sending file to %s:%s\n", peer_address.ip, peer_address.port);
+    transfer_file(peer_address, "files/pifile.txt");
+  }
+
 
   if (strcmp(input, "receiver")==0) {
     printf("Running as receiver\n");
