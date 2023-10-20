@@ -1,6 +1,6 @@
 sender_ip: 127.0.0.1
 sender_port: 5006
-receiver_ip: 127.0.0.1 
-receiver_port: 5006
+pi_ip: 192.168.4.1
+pi_port: 5006
 desktop_ip: 100.67.32.225
 desktop_port: 5006

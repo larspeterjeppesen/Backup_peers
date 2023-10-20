@@ -285,30 +285,45 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
 
 
 int main(void) { 
-  
   //Load configuration 
   char input[256];
   char input2[256];
+  char ip_pattern[20];
+  char port_pattern[20];
+
   PeerAddress_t peer_address = {0};
   
   FILE* f = fopen("config", "r");
-  while (peer_address.ip[0] == 0 || peer_address.port[0] == 0) {
-    fscanf(f, "%s %s", input, input2);
-    if (strcmp(input, "desktop_ip:") == 0) {
-      strcpy(peer_address.ip, input2); 
-    }
-    if (strcmp(input, "desktop_port:") == 0) {
-      strcpy(peer_address.port, input2); 
-    }
-  }
 
   printf("Enter mode:\n");  
   scanf("%s", input);
-
-  if (strcmp(input, "sender")==0) {
+  if (strcmp(input, "phone")==0) {
+    while (peer_address.ip[0] == 0 || peer_address.port[0] == 0) {
+      fscanf(f, "%s %s", input, input2);
+      if (strcmp(input, "pi_ip:") == 0) {
+        strcpy(peer_address.ip, input2); 
+      }
+      if (strcmp(input, "pi_port:") == 0) {
+        strcpy(peer_address.port, input2); 
+      }
+    }
     printf("Sending file to %s:%s\n", peer_address.ip, peer_address.port);
     transfer_file(peer_address, "files/tinyfile.txt");
   } 
+  else if (strcmp(input, "pi")==0) {
+    while (peer_address.ip[0] == 0 || peer_address.port[0] == 0) {
+      fscanf(f, "%s %s", input, input2);
+      if (strcmp(input, "desktop_ip:") == 0) {
+        strcpy(peer_address.ip, input2); 
+      }
+      if (strcmp(input, "desktop_port:") == 0) {
+        strcpy(peer_address.port, input2); 
+      }
+    }
+    printf("Sending file to %s:%s\n", peer_address.ip, peer_address.port);
+    transfer_file(peer_address, "files/tinyfile.txt");
+  }
+
   if (strcmp(input, "receiver")==0) {
     printf("Running as receiver\n");
     listen_for_conn(peer_address.port); 
