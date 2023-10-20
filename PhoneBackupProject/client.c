@@ -308,7 +308,7 @@ int main(void) {
       }
     }
     printf("Sending file to %s:%s\n", peer_address.ip, peer_address.port);
-    transfer_file(peer_address, "files/tinyfile.txt");
+    transfer_file(peer_address, "files/d.txt");
   } 
   else if (strcmp(input, "desktop")==0) {
     while (peer_address.ip[0] == 0 || peer_address.port[0] == 0) {
