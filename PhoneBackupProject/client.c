@@ -284,7 +284,7 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
 }
 
 
-int main() { 
+int main(void) { 
   
   //Load configuration 
   char input[256];
@@ -307,7 +307,7 @@ int main() {
 
   if (strcmp(input, "sender")==0) {
     printf("Sending file to %s:%s\n", peer_address.ip, peer_address.port);
-    transfer_file(peer_address, "files/file.txt");
+    transfer_file(peer_address, "files/tinyfile.txt");
   } 
   if (strcmp(input, "receiver")==0) {
     printf("Running as receiver\n");
