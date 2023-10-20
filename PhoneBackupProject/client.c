@@ -18,8 +18,14 @@
     return x;
   #endif
 
-  u_int32_t (*ntohl)(u_int32_t);
-  ntohl = htonl;  
+u_int32_t ntohl(u_int32_t x) {
+  #if BYTE_ORDER == LITTLE_ENDIAN
+    unsigned char *s = (unsigned char *)&x;
+    return (u_int32_t)(s[0] << 24 | s[1] << 16 | s[2] << 8 | s[3]);
+  }
+  #else
+    return x;
+  #endif
 #endif
 
 
