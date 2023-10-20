@@ -8,6 +8,21 @@
 #include "client.h"
 
 
+#if defined(__clang__)
+  u_int32_t htonl(u_int32_t x) {
+  #if BYTE_ORDER == LITTLE_ENDIAN
+    unsigned char *s = (unsigned char *)&x;
+    return (u_int32_t)(s[0] << 24 | s[1] << 16 | s[2] << 8 | s[3]);
+  }
+  #else
+    return x;
+  #endif
+
+  u_int32_t (*ntohl)(u_int32_t);
+  ntohl = htonl;  
+#endif
+
+
 
 /*
  * Gets a sha256 hash of specified data, sourcedata. The hash itself is
