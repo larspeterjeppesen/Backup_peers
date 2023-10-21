@@ -347,6 +347,7 @@ int main(void) {
       printf("Command not recognized\n");
     }
   }
+  printf("%s\n", myport);
   if (sending) {
     transfer_file(target_address, file); 
   } else { 
