@@ -313,6 +313,7 @@ int main(void) {
   char ip[20];
   char port[20];
   int sending = 1;
+  char myip[IP_LEN];
   char myport[PORT_LEN];
   PeerAddress_t target_address = {0}; 
 
@@ -361,11 +362,11 @@ int main(void) {
       while (getline(&line, &n, f) != EOF) { 
         sscanf(line, "%s %s %s", input, ip, port);
         if (strcmp(input, "pc")==0) {
+          strcpy(myip, ip);
           strcpy(myport, port);
-          sending = 0;
-          break;
         }
       }
+      printf("Listening for connection at %s:%s\n", myip, myport);
       listen_for_conn(myport); 
       break;
     }
