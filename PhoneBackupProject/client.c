@@ -284,65 +284,73 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
 }
 
 
+
+
 int main(void) { 
-  //Load configuration 
+  char* file = "files/tinyfile.txt";
+  //Configuration 
   char input[256];
-  char input2[256];
-  char ip_pattern[20];
-  char port_pattern[20];
+  char* line;
+  size_t n = 0;
+  char ip[20];
+  char port[20];
+  int sending = 1;
+  char myport[PORT_LEN];
+  PeerAddress_t target_address = {0}; 
 
-  PeerAddress_t peer_address = {0};
-  
   FILE* f = fopen("config", "r");
-
-  printf("Enter mode/target:\n");  
+  printf("Enter mode:\n");  
   scanf("%s", input);
-  if (strcmp(input, "pi")==0) {
-    while (peer_address.ip[0] == 0 || peer_address.port[0] == 0) {
-      fscanf(f, "%s %s", input, input2);
-      if (strcmp(input, "pi_ip:") == 0) {
-        strcpy(peer_address.ip, input2); 
+  while (1) {    
+    if (strcmp(input, "phone")==0) {
+      while (getline(&line, &n, f) != EOF) { 
+        sscanf(line, "%s %s %s", input, ip, port);
+        if (strcmp(input, "phone")==0) {
+          strcpy(myport, port);
+        }
+        if (strcmp(input, "pi")==0) {
+          strcpy(target_address.ip, ip);
+          strcpy(target_address.port, port);
+        }
       }
-      if (strcmp(input, "pi_port:") == 0) {
-        strcpy(peer_address.port, input2); 
-      }
+      break;
     }
-    printf("Sending file to %s:%s\n", peer_address.ip, peer_address.port);
-    transfer_file(peer_address, "files/d.txt");
-  } 
-  else if (strcmp(input, "desktop")==0) {
-    while (peer_address.ip[0] == 0 || peer_address.port[0] == 0) {
-      fscanf(f, "%s %s", input, input2);
-      if (strcmp(input, "desktop_ip:") == 0) {
-        strcpy(peer_address.ip, input2); 
+    else if (strcmp(input, "pi")==0) {
+      while (getline(&line, &n, f) != EOF) { 
+        sscanf(line, "%s %s %s", input, ip, port);
+        if (strcmp(input, "pi")==0) {
+          strcpy(myport, port);
+        }
+        if (strcmp(input, "pc")==0) {
+          strcpy(target_address.ip, ip);
+          strcpy(target_address.port, port);
+        }
       }
-      if (strcmp(input, "desktop_port:") == 0) {
-        strcpy(peer_address.port, input2); 
-      }
+      break;
     }
-
-    printf("Sending file to %s:%s\n", peer_address.ip, peer_address.port);
-    transfer_file(peer_address, "files/tinyfile.txt");
+    else if (strcmp(input, "pc")==0) {
+      while (getline(&line, &n, f) != EOF) { 
+        sscanf(line, "%s %s %s", input, ip, port);
+        if (strcmp(input, "pc")==0) {
+          strcpy(myport, port);
+          sending = 0;
+          break;
+        }
+      }
+      break;
+    }
+    else if (strcmp(input, "manual")==0) {
+    //For manual tests
+      break;
+    }
+    else {
+      printf("Command not recognized\n");
+    }
   }
-
-  else if (strcmp(input, "phone")==0) {
-    while (peer_address.ip[0] == 0 || peer_address.port[0] == 0) {
-      fscanf(f, "%s %s", input, input2);
-      if (strcmp(input, "phone_ip:") == 0) {
-        strcpy(peer_address.ip, input2); 
-      }
-      if (strcmp(input, "phone_port:") == 0) {
-        strcpy(peer_address.port, input2); 
-      }
-    }
-    printf("Sending file to %s:%s\n", peer_address.ip, peer_address.port);
-    transfer_file(peer_address, "files/pifile.txt");
-  }
-
-
-  if (strcmp(input, "receiver")==0) {
-    printf("Running as receiver\n");
-    listen_for_conn(peer_address.port); 
+  if (sending) {
+    transfer_file(target_address, file); 
+  } else { 
+    listen_for_conn(myport); 
   }
 
 
