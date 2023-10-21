@@ -308,6 +308,7 @@ void* sender_thread(void* arg) {
 
 
 int main(void) { 
+  printf("entry\n");
   char* file = "files/tinyfile.txt";
   //Configuration 
   char input[256];
