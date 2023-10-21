@@ -224,30 +224,32 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
   fseek(fp, 0, SEEK_END);
   uint32_t file_size = ftell(fp);
   fclose(fp);
-
+  printf("227\n");
   uint32_t block_count = ceil((double)file_size/(double)(TRANSFER_PAYLOAD_LEN));
   metadata.path_len = htonl((uint32_t)strlen(file_path));
   metadata.block_count = htonl(block_count);
   metadata.file_size = htonl(file_size); 
   get_file_sha(file_path, metadata.total_hash, file_size); 
   strcpy(metadata.file_path, file_path);
-
+  printf("234\n");
   uint32_t length = TRANSFER_HEADER_LEN+strlen(file_path)+1;
   printf("length %d\n", length);
   request.header.length = htonl(length);
   request.header.command = htonl((uint32_t)CMD_INITIALIZE_TRANSFER);
   get_data_sha((void*)&metadata, request.header.payload_hash, length);
-
+  printf("240\n");
   memcpy(request.payload, &metadata, length);
   compsys_helper_state_t state;
   char read_buf[TRANSFER_PAYLOAD_LEN+1];
   char msg_buf[MAX_MSG_LEN];  
   memcpy(msg_buf, &request, REQUEST_HEADER_LEN + length);
+  printf("246\n");
   //Connect to peer
   int connfd = compsys_helper_open_clientfd(peer_address.ip, peer_address.port);
   compsys_helper_readinitb(&state, connfd);
+  printf("250\n");
   compsys_helper_writen(connfd, msg_buf, REQUEST_HEADER_LEN + length);
- 
+  printf("252\n"); 
   //Receive cornfirmation
   compsys_helper_readnb(&state, read_buf, RESPONSE_LEN);
   uint32_t status = ntohl(*(uint32_t*)read_buf);
@@ -298,6 +300,7 @@ typedef struct {
 } SenderArgs_t;
 
 void* sender_thread(void* arg) {
+  printf("sender thread\n");
   SenderArgs_t* args = (SenderArgs_t*)arg; 
   transfer_file(args->target_address, args->file_path); 
   return NULL;
