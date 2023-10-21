@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
 
 #include "sha256.h"
 #include "compsys_helpers.h"
@@ -285,6 +286,23 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
 
 
 
+void* listener_thread(void* arg) {
+  char* listening_port = (char*)arg;
+  listen_for_conn(listening_port); 
+  return NULL;
+}
+
+typedef struct {
+  PeerAddress_t target_address;
+  char* file_path;
+} SenderArgs_t;
+
+void* sender_thread(void* arg) {
+  SenderArgs_t* args = (SenderArgs_t*)arg; 
+  transfer_file(args->target_address, args->file_path); 
+  return NULL;
+}
+
 
 int main(void) { 
   char* file = "files/tinyfile.txt";
@@ -299,10 +317,9 @@ int main(void) {
   PeerAddress_t target_address = {0}; 
 
   FILE* f = fopen("config", "r");
-  printf("Enter mode:\n");  
-  scanf("%s", input);
   while (1) {    
-    if (strcmp(input, "phone")==0) {
+    printf("Enter mode:\n");  
+    scanf("%s", input);   if (strcmp(input, "phone")==0) {
       while (getline(&line, &n, f) != EOF) { 
         sscanf(line, "%s %s %s", input, ip, port);
         if (strcmp(input, "phone")==0) {
@@ -313,6 +330,7 @@ int main(void) {
           strcpy(target_address.port, port);
         }
       }
+      transfer_file(target_address, file); 
       break;
     }
     else if (strcmp(input, "pi")==0) {
@@ -326,6 +344,17 @@ int main(void) {
           strcpy(target_address.port, port);
         }
       }
+
+      pthread_t tids[2];
+      char* listening_port = strdup(myport);
+      pthread_create(&tids[0], NULL, listener_thread, (void*)listening_port);
+      
+      SenderArgs_t s_args;
+      memcpy(&s_args, &target_address, sizeof(target_address));
+      s_args.file_path = strdup(file);
+      pthread_create(&tids[1], NULL, sender_thread, (void*)&s_args);
+      pthread_join(tids[1], NULL);
+      pthread_join(tids[0], NULL);
       break;
     }
     else if (strcmp(input, "pc")==0) {
@@ -337,6 +366,7 @@ int main(void) {
           break;
         }
       }
+      listen_for_conn(myport); 
       break;
     }
     else if (strcmp(input, "manual")==0) {
@@ -349,9 +379,7 @@ int main(void) {
   }
   printf("%s\n", myport);
   if (sending) {
-    transfer_file(target_address, file); 
   } else { 
-    listen_for_conn(myport); 
   }
 
 
