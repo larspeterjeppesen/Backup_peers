@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <assert.h>
 
 #include "sha256.h"
 #include "compsys_helpers.h"
@@ -216,42 +217,54 @@ void receive_file(int connfd, uint32_t command, void* received_metadata) {
 
 //Called by the host that wants to transfer files
 void transfer_file(PeerAddress_t peer_address, char* file_path) {
-  //Build request
   Request_t request;
   Transfer_Metadata_t metadata;
   memset(metadata.file_path, 0, PATH_LEN);
+  printf("%s\n", file_path);
   FILE* fp = fopen(file_path, "r");
+  assert(fp);
   fseek(fp, 0, SEEK_END);
   uint32_t file_size = ftell(fp);
   fclose(fp);
-  printf("227\n");
+ 
+  //Build request payload
   uint32_t block_count = ceil((double)file_size/(double)(TRANSFER_PAYLOAD_LEN));
   metadata.path_len = htonl((uint32_t)strlen(file_path));
   metadata.block_count = htonl(block_count);
   metadata.file_size = htonl(file_size); 
   get_file_sha(file_path, metadata.total_hash, file_size); 
   strcpy(metadata.file_path, file_path);
-  printf("234\n");
-  uint32_t length = TRANSFER_HEADER_LEN+strlen(file_path)+1;
-  printf("length %d\n", length);
+ 
+  //Build request header
+  uint32_t length = TRANSFER_HEADER_LEN+strlen(file_path)+1; 
   request.header.length = htonl(length);
   request.header.command = htonl((uint32_t)CMD_INITIALIZE_TRANSFER);
   get_data_sha((void*)&metadata, request.header.payload_hash, length);
-  printf("240\n");
+
+  //Assemble request
   memcpy(request.payload, &metadata, length);
   compsys_helper_state_t state;
   char read_buf[TRANSFER_PAYLOAD_LEN+1];
   char msg_buf[MAX_MSG_LEN];  
   memcpy(msg_buf, &request, REQUEST_HEADER_LEN + length);
-  printf("246\n");
-  //Connect to peer
+  
+  //Connect to peer and send request
   int connfd = compsys_helper_open_clientfd(peer_address.ip, peer_address.port);
-  compsys_helper_readinitb(&state, connfd);
-  printf("250\n");
+  compsys_helper_readinitb(&state, connfd); 
   compsys_helper_writen(connfd, msg_buf, REQUEST_HEADER_LEN + length);
-  printf("252\n"); 
-  //Receive cornfirmation
-  compsys_helper_readnb(&state, read_buf, RESPONSE_LEN);
+  
+  //Receive response
+  ssize_t n = compsys_helper_readnb(&state, read_buf, RESPONSE_LEN);
+  if (n < 0) {
+    fprintf(stderr, "Error when reading from socket: %s\n", strerror(errno));
+    close(connfd);
+    return;
+  }
+  if (n != RESPONSE_LEN) {
+    fprintf(stderr, 
+            "Incorrect number of bytes read from socket. Expected %d, read %ld.\n", RESPONSE_LEN, n);
+  }
+
   uint32_t status = ntohl(*(uint32_t*)read_buf);
   if (status != OK) {
     fprintf(stderr, "Transfer initialization failed with status %d\n", status);
@@ -261,10 +274,11 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
 
   //Transfer actual file
   fp = fopen(file_path, "r");
+  assert(fp);
   for (uint32_t i = 0; i < block_count; i++) {
     printf("Block %d\n", i);
     //Read data to send
-    size_t n = fread(read_buf, sizeof(char), TRANSFER_PAYLOAD_LEN, fp);
+    size_t n = fread(read_buf, sizeof(char), TRANSFER_PAYLOAD_LEN, fp); 
     read_buf[n] = 0;
    
     //Build message
@@ -282,7 +296,6 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
   
   fclose(fp);
   close(connfd);
-  printf("File sent\n"); 
   return;
 }
 
@@ -296,100 +309,231 @@ void* listener_thread(void* arg) {
 
 typedef struct {
   PeerAddress_t target_address;
-  char* file_path;
+  char file_path[PATH_LEN];
 } SenderArgs_t;
 
 void* sender_thread(void* arg) {
-  printf("sender thread\n");
   SenderArgs_t* args = (SenderArgs_t*)arg; 
+  printf("%s\n", args->file_path);
   transfer_file(args->target_address, args->file_path); 
+
+  free(args);
   return NULL;
 }
 
-
-int main(void) { 
-  printf("entry\n");
-  char* file = "files/tinyfile.txt";
-  //Configuration 
-  char input[256];
-  char* line;
-  size_t n = 0;
-  char ip[20];
-  char port[20];
-  int sending = 1;
-  char myip[IP_LEN];
-  char myport[PORT_LEN];
-  PeerAddress_t target_address = {0}; 
-
-  FILE* f = fopen("config", "r");
-  while (1) {    
-    printf("Enter mode:\n");  
-    scanf("%s", input);   if (strcmp(input, "phone")==0) {
-      while (getline(&line, &n, f) != EOF) { 
-        sscanf(line, "%s %s %s", input, ip, port);
-        if (strcmp(input, "phone")==0) {
-          strcpy(myport, port);
-        }
-        if (strcmp(input, "pi")==0) {
-          strcpy(target_address.ip, ip);
-          strcpy(target_address.port, port);
-        }
-      }
-      transfer_file(target_address, file); 
-      break;
+int isValidIP(char* ip_string) {
+  int ip[4];
+  int n = sscanf(ip_string, "%d.%d.%d.%d", ip, ip+1, ip+2, ip+3);
+  if (n < 0) {
+    fprintf(stderr, "Error scanning ip: %s\n", strerror(errno));
+    return 0; 
+  }
+  if (n != 4) {
+    fprintf(stderr, "Invalid ip provided\n");
+    return 0; 
+  }
+  for (int i = 0; i < 4; i++) {
+    if (ip[i] < 0 || ip[i] > 255) {
+      fprintf(stderr, "Invalid ip provided\n");
+      return 0;
     }
-    else if (strcmp(input, "pi")==0) {
-      while (getline(&line, &n, f) != EOF) { 
-        sscanf(line, "%s %s %s", input, ip, port);
-        if (strcmp(input, "pi")==0) {
-          strcpy(myport, port);
-        }
-        if (strcmp(input, "pc")==0) {
-          strcpy(target_address.ip, ip);
-          strcpy(target_address.port, port);
-        }
-      }
+  }  
+  return 1;
+}
 
-      pthread_t tids[2];
-      char* listening_port = strdup(myport);
-      pthread_create(&tids[0], NULL, listener_thread, (void*)listening_port);
-      
-      SenderArgs_t s_args;
-      memcpy(&s_args, &target_address, sizeof(target_address));
-      s_args.file_path = strdup(file);
-      pthread_create(&tids[1], NULL, sender_thread, (void*)&s_args);
-      pthread_join(tids[1], NULL);
-      pthread_join(tids[0], NULL);
-      break;
+int isValidPort(char* port_string) {
+  int port;
+  int n = sscanf(port_string, "%d", &port);
+  if (n < 0) {
+    fprintf(stderr, "Error scanning port: %s\n", strerror(errno));
+    return 0; 
+  }
+  if (n != 1 || port < 0 || port > 65535) {
+    fprintf(stderr, "Invalid port provided\n");
+    return 0;
+  } 
+  return 1;
+}
+
+void print_help() {
+  char* manual_usage = "For manual usage, use at least one of the following modes:\n";
+  char* s = "-s [IP] [Port] [filepath]` - will send `[filepath]` to the given address.\n";
+  char* r = "-r [Port]` - will listen for incoming connections on `[Port]`.\n";
+  char* predef_usage = "\nFor predefined modes, use only one of the following:\n";
+  char* premodes = "--phone, --pi, --desktop\n";
+  fprintf(stdout, "%s%s%s%s%s", manual_usage, s, r, predef_usage, premodes);
+  return;
+}
+
+int main(int argc, char** argv) { 
+  PeerAddress_t target_address;
+  char file_path[PATH_LEN];
+  char self_port[PORT_LEN];
+  bool sender = false;
+  bool receiver = false;
+
+  if (argc == 1) {
+    print_help();
+    return EXIT_FAILURE;
+  } 
+  if (argc == 2) {
+    if (strcmp(argv[1], "--phone") == 0) {
+      //Phone stuff
     }
-    else if (strcmp(input, "pc")==0) {
-      while (getline(&line, &n, f) != EOF) { 
-        sscanf(line, "%s %s %s", input, ip, port);
-        if (strcmp(input, "pc")==0) {
-          strcpy(myip, ip);
-          strcpy(myport, port);
-        }
-      }
-      printf("Listening for connection at %s:%s\n", myip, myport);
-      listen_for_conn(myport); 
-      break;
+    else if (strcmp(argv[1], "--pi") == 0) {
+      //Pi stuff
     }
-    else if (strcmp(input, "manual")==0) {
-    //For manual tests
-      break;
+    else if (strcmp(argv[1], "--desktop") == 0) {
+      //Desktop stuff
     }
     else {
-      printf("Command not recognized\n");
+      print_help();
+      return EXIT_FAILURE;
+    }
+  } 
+  else if (3 <= argc && argc <= 7) {  
+    for (int i = 1; i < argc;) {
+      // Sender mode
+      if (argc - i > 0 && strcmp(argv[i], "-s") == 0) {
+        assert(isValidIP(argv[i+1]));
+        assert(isValidPort(argv[i+2]));
+        
+        strcpy(target_address.ip,argv[i+1]);
+        strcpy(target_address.port,argv[i+2]);
+        strcpy(file_path, argv[i+3]);
+        sender = true;
+        i += 4;
+      }
+      // Receiver mode
+      else if (strcmp(argv[i], "-r") == 0) {
+        assert(isValidPort(argv[i+1]));
+        strcpy(self_port,argv[i+1]);
+        receiver = true;
+        i += 2;
+      }
+      else {
+        break;
+      }
     }
   }
-  printf("%s\n", myport);
-  if (sending) {
-  } else { 
+  else {
+    print_help();
+    return EXIT_FAILURE;
+  }
+  
+  pthread_t receiver_tid;
+  pthread_t sender_tid;
+
+  if (receiver) {
+    pthread_create(&receiver_tid, NULL, listener_thread, (void*)&self_port);
   }
 
+  if (sender) {
+    SenderArgs_t* s_args = malloc(sizeof(SenderArgs_t));
+    memcpy(&s_args->target_address, &target_address, sizeof(target_address));
+    strcpy(s_args->file_path, file_path);    
+    pthread_create(&sender_tid, NULL, sender_thread, (void*)s_args);
+  }
 
-  return 0;
+  //Now what?
 
+  pthread_join(receiver_tid, NULL);
+  pthread_join(sender_tid, NULL);
+
+  
+  return EXIT_SUCCESS;
 }
+
+//  pthread_t tids[2];
+//  char* listening_port = strdup(myport);
+//  pthread_create(&tids[0], NULL, listener_thread, (void*)listening_port);
+//  
+//
+//  pthread_create(&tids[1], NULL, sender_thread, (void*)&s_args);
+//  pthread_join(tids[1], NULL);
+//  pthread_join(tids[0], NULL);
+//
+//  char* file = "files/tinyfile.txt";
+//  //Configuration 
+//  char input[256];
+//  char* line;
+//  size_t n = 0;
+//  char ip[20];
+//  char port[20];
+//  int sending = 1;
+//  char myip[IP_LEN];
+//  char myport[PORT_LEN];
+//  PeerAddress_t target_address = {0}; 
+//
+//  FILE* f = fopen("config", "r");
+//  while (1) {    
+//    printf("Enter mode:\n");  
+//    scanf("%s", input);   if (strcmp(input, "phone")==0) {
+//      while (getline(&line, &n, f) != EOF) { 
+//        sscanf(line, "%s %s %s", input, ip, port);
+//        if (strcmp(input, "phone")==0) {
+//          strcpy(myport, port);
+//        }
+//        if (strcmp(input, "pi")==0) {
+//          strcpy(target_address.ip, ip);
+//          strcpy(target_address.port, port);
+//        }
+//      }
+//      transfer_file(target_address, file); 
+//      break;
+//    }
+//    else if (strcmp(input, "pi")==0) {
+//      while (getline(&line, &n, f) != EOF) { 
+//        sscanf(line, "%s %s %s", input, ip, port);
+//        if (strcmp(input, "pi")==0) {
+//          strcpy(myport, port);
+//        }
+//        if (strcmp(input, "pc")==0) {
+//          strcpy(target_address.ip, ip);
+//          strcpy(target_address.port, port);
+//        }
+//      }
+//
+//      pthread_t tids[2];
+//      char* listening_port = strdup(myport);
+//      pthread_create(&tids[0], NULL, listener_thread, (void*)listening_port);
+//      
+//      SenderArgs_t s_args;
+//      memcpy(&s_args, &target_address, sizeof(target_address));
+//      s_args.file_path = strdup(file);
+//      pthread_create(&tids[1], NULL, sender_thread, (void*)&s_args);
+//      pthread_join(tids[1], NULL);
+//      pthread_join(tids[0], NULL);
+//      break;
+//    }
+//    else if (strcmp(input, "pc")==0) {
+//      while (getline(&line, &n, f) != EOF) { 
+//        sscanf(line, "%s %s %s", input, ip, port);
+//        if (strcmp(input, "pc")==0) {
+//          strcpy(myip, ip);
+//          strcpy(myport, port);
+//        }
+//      }
+//      printf("Listening for connection at %s:%s\n", myip, myport);
+//      listen_for_conn(myport); 
+//      break;
+//    }
+//    else if (strcmp(input, "manual")==0) {
+//    //For manual tests
+//      break;
+//    }
+//    else {
+//      printf("Command not recognized\n");
+//    }
+//  }
+//  printf("%s\n", myport);
+//  if (sending) {
+//  } else { 
+//  }
+//
+//
+//  return 0;
+//
+//}
 
 
