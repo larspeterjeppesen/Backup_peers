@@ -1,43 +1,51 @@
-#include "compsys_helpers.h"
+#include "io_assist.h"
 
-/*
- * compsys_helper_read - This is a wrapper for the Unix read() function that
- *    transfers min(n, compsys_helper_cnt) bytes from an internal buffer to a 
+/* DISCLAIMER:
+
+ * This library is pretty much a partial copy of the RIO library provided 
+ * by Computer Systems - A programmer's perspective by Bryant and O'Hallaron.
+ * source: 
+ * https://csapp.cs.cmu.edu/3e/ics3/code/src/csapp.c 
+ * and http://csapp.cs.cmu.edu/2e/ics2/code/include/csapp.h
+ 
+ * Description:
+ * io_assist_read - This is a wrapper for the Unix read() function that
+ *    transfers min(n, io_assist_cnt) bytes from an internal buffer to a 
  *    user buffer, where n is the number of bytes requested by the user and 
- *    compsys_helper_cnt is the number of unread bytes in the internal buffer. 
- *    On entry, compsys_helper_read() refills the internal buffer via a call to
+ *    io_assist_cnt is the number of unread bytes in the internal buffer. 
+ *    On entry, io_assist_read() refills the internal buffer via a call to
  *    read() if the internal buffer is empty.
  */
-static ssize_t compsys_helper_read(compsys_helper_state_t *rp, char *usrbuf, size_t n)
+static ssize_t io_assist_read(io_assist_state_t *rp, char *usrbuf, size_t n)
 {
     int cnt;
 
-    while (rp->compsys_helper_cnt <= 0) {  /* Refill if buf is empty */
-        rp->compsys_helper_cnt = read(rp->compsys_helper_fd, rp->compsys_helper_buf, sizeof(rp->compsys_helper_buf));
-        if (rp->compsys_helper_cnt < 0) {
+    while (rp->io_assist_cnt <= 0) {  /* Refill if buf is empty */
+        rp->io_assist_cnt = read(rp->io_assist_fd, rp->io_assist_buf, sizeof(rp->io_assist_buf));
+        if (rp->io_assist_cnt < 0) {
             if (errno != EINTR) /* Interrupted by sig handler return */
                 return -1;
         }
-        else if (rp->compsys_helper_cnt == 0)  /* EOF */
+        else if (rp->io_assist_cnt == 0)  /* EOF */
             return 0;
         else
-            rp->compsys_helper_bufptr = rp->compsys_helper_buf; /* Reset buffer ptr */
+            rp->io_assist_bufptr = rp->io_assist_buf; /* Reset buffer ptr */
     }
 
-    /* Copy min(n, rp->compsys_helper_cnt) bytes from internal buf to user buf */
+    /* Copy min(n, rp->io_assist_cnt) bytes from internal buf to user buf */
     cnt = n;
-    if (rp->compsys_helper_cnt < (int) n)
-    cnt = rp->compsys_helper_cnt;
-    memcpy(usrbuf, rp->compsys_helper_bufptr, cnt);
-    rp->compsys_helper_bufptr += cnt;
-    rp->compsys_helper_cnt -= cnt;
+    if (rp->io_assist_cnt < (int) n)
+    cnt = rp->io_assist_cnt;
+    memcpy(usrbuf, rp->io_assist_bufptr, cnt);
+    rp->io_assist_bufptr += cnt;
+    rp->io_assist_cnt -= cnt;
     return cnt;
 }
 
 /*
- * compsys_helper_readn - Robustly read n bytes (unbuffered)
+ * io_assist_readn - Robustly read n bytes (unbuffered)
  */
-ssize_t compsys_helper_readn(int fd, void *usrbuf, size_t n)
+ssize_t io_assist_readn(int fd, void *usrbuf, size_t n)
 {
     size_t nleft = n;
     ssize_t nread;
@@ -59,9 +67,9 @@ ssize_t compsys_helper_readn(int fd, void *usrbuf, size_t n)
 }
 
 /*
- * compsys_helper_writen - Robustly write n bytes (unbuffered)
+ * io_assist_writen - Robustly write n bytes (unbuffered)
  */
-ssize_t compsys_helper_writen(int fd, void *usrbuf, size_t n)
+ssize_t io_assist_writen(int fd, void *usrbuf, size_t n)
 {
     size_t nleft = n;
     ssize_t nwritten;
@@ -81,26 +89,26 @@ ssize_t compsys_helper_writen(int fd, void *usrbuf, size_t n)
 }
 
 /*
- * compsys_helper_readinitb - Associate a descriptor with a read buffer and reset buffer
+ * io_assist_readinitb - Associate a descriptor with a read buffer and reset buffer
  */
-void compsys_helper_readinitb(compsys_helper_state_t *rp, int fd)
+void io_assist_readinitb(io_assist_state_t *rp, int fd)
 {
-    rp->compsys_helper_fd = fd;
-    rp->compsys_helper_cnt = 0;
-    rp->compsys_helper_bufptr = rp->compsys_helper_buf;
+    rp->io_assist_fd = fd;
+    rp->io_assist_cnt = 0;
+    rp->io_assist_bufptr = rp->io_assist_buf;
 }
 
 /*
- * compsys_helper_readnb - Robustly read n bytes (buffered)
+ * io_assist_readnb - Robustly read n bytes (buffered)
  */
-ssize_t compsys_helper_readnb(compsys_helper_state_t *rp, void *usrbuf, size_t n)
+ssize_t io_assist_readnb(io_assist_state_t *rp, void *usrbuf, size_t n)
 {
     size_t nleft = n;
     ssize_t nread;
     char *bufp = usrbuf;
 
     while (nleft > 0) {
-        if ((nread = compsys_helper_read(rp, bufp, nleft)) < 0)
+        if ((nread = io_assist_read(rp, bufp, nleft)) < 0)
                 return -1;          /* errno set by read() */
         else if (nread == 0)
             break;              /* EOF */
@@ -111,15 +119,15 @@ ssize_t compsys_helper_readnb(compsys_helper_state_t *rp, void *usrbuf, size_t n
 }
 
 /*
- * compsys_helper_readlineb - Robustly read a text line (buffered)
+ * io_assist_readlineb - Robustly read a text line (buffered)
  */
-ssize_t compsys_helper_readlineb(compsys_helper_state_t *rp, void *usrbuf, size_t maxlen)
+ssize_t io_assist_readlineb(io_assist_state_t *rp, void *usrbuf, size_t maxlen)
 {
     size_t n, rc;
     char c, *bufp = usrbuf;
 
     for (n = 1; n < maxlen; n++) {
-        if ((rc = compsys_helper_read(rp, &c, 1)) == 1) {
+        if ((rc = io_assist_read(rp, &c, 1)) == 1) {
             *bufp++ = c;
             if (c == '\n') {
                 n++;
@@ -138,7 +146,7 @@ ssize_t compsys_helper_readlineb(compsys_helper_state_t *rp, void *usrbuf, size_
 }
 
 /*
- * compsys_helper_open_clientfd - Open connection to server at <hostname, port> and
+ * io_assist_open_clientfd - Open connection to server at <hostname, port> and
  *     return a socket descriptor ready for reading and writing. This
  *     function is reentrant and protocol-independent.
  *
@@ -146,7 +154,7 @@ ssize_t compsys_helper_readlineb(compsys_helper_state_t *rp, void *usrbuf, size_
  *       -2 for getaddrinfo error
  *       -1 with errno set for other errors.
  */
-int compsys_helper_open_clientfd(char *hostname, char *port) {
+int io_assist_open_clientfd(char *hostname, char *port) {
     int clientfd, rc;
     struct addrinfo hints, *listp, *p;
 
@@ -184,14 +192,14 @@ int compsys_helper_open_clientfd(char *hostname, char *port) {
 }
 
 /*
- * compsys_helper_open_listenfd - Open and return a listening socket on port. This
+ * io_assist_open_listenfd - Open and return a listening socket on port. This
  *     function is reentrant and protocol-independent.
  *
  *     On error, returns:
  *       -2 for getaddrinfo error
  *       -1 with errno set for other errors.
  */
-int compsys_helper_open_listenfd(char *port)
+int io_assist_open_listenfd(char *port)
 {
     struct addrinfo hints, *listp, *p;
     int listenfd, rc, optval=1;

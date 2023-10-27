@@ -9,7 +9,7 @@
 #include <unistd.h>
 
 #include "sha256.h"
-#include "compsys_helpers.h"
+#include "io_assist.h"
 #include "client.h"
 
 
@@ -97,15 +97,15 @@ void listen_for_conn(char* port) {
   int connfd;
   struct sockaddr_storage clientaddr;
   socklen_t clientlen;
-  compsys_helper_state_t state;
+  io_assist_state_t state;
   char msg_buf[MAX_MSG_LEN];
 
-  listenfd = compsys_helper_open_listenfd(port);
+  listenfd = io_assist_open_listenfd(port);
   clientlen = sizeof(struct sockaddr_storage);
   connfd = accept(listenfd, (struct sockaddr*) &clientaddr, &clientlen);
  
-  compsys_helper_readinitb(&state, connfd);
-  compsys_helper_readnb(&state, msg_buf, REQUEST_HEADER_LEN);
+  io_assist_readinitb(&state, connfd);
+  io_assist_readnb(&state, msg_buf, REQUEST_HEADER_LEN);
 
   uint32_t length = ntohl(*(uint32_t*)msg_buf);
   uint32_t command = ntohl(*(uint32_t*)(msg_buf+4));
@@ -114,7 +114,7 @@ void listen_for_conn(char* port) {
 
   if (command == CMD_INITIALIZE_TRANSFER) {
     char payload_buf[length+1];
-    compsys_helper_readnb(&state, msg_buf, length); 
+    io_assist_readnb(&state, msg_buf, length); 
 
     memcpy(payload_buf, msg_buf, length);
     hashdata_t payload_hash;
@@ -175,14 +175,14 @@ void receive_file(int connfd, uint32_t command, void* received_metadata) {
   if (command == CMD_INITIALIZE_TRANSFER) {
     char msg_buf[MAX_MSG_LEN];
     char payload_buf[TRANSFER_PAYLOAD_LEN+1];
-    compsys_helper_state_t state;
-    compsys_helper_readinitb(&state, connfd); 
+    io_assist_state_t state;
+    io_assist_readinitb(&state, connfd); 
 
     //Accept incoming transfer
     Response_t response;
     response.status = htonl(OK);
     memcpy(msg_buf, &response, RESPONSE_LEN);
-    compsys_helper_writen(connfd, msg_buf, RESPONSE_LEN);
+    io_assist_writen(connfd, msg_buf, RESPONSE_LEN);
 
     //Receive file
     Transfer_Metadata_t metadata = *(Transfer_Metadata_t*)received_metadata;
@@ -197,7 +197,7 @@ void receive_file(int connfd, uint32_t command, void* received_metadata) {
     printf("Storing file at: %s\n", file_path);
     int dest_fd = open(file_path, O_WRONLY | O_CREAT, S_IRUSR|S_IWUSR); 
     for (uint32_t i = 0; i < metadata.block_count; i++) {
-      compsys_helper_readnb(&state, msg_buf, MAX_MSG_LEN);
+      io_assist_readnb(&state, msg_buf, MAX_MSG_LEN);
       
       uint32_t length = ntohl(*(uint32_t*)msg_buf);
       uint32_t status = ntohl(*(uint32_t*)(msg_buf+4));
@@ -261,18 +261,18 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
 
   //Assemble request
   memcpy(request.payload, &metadata, length);
-  compsys_helper_state_t state;
+  io_assist_state_t state;
   char read_buf[TRANSFER_PAYLOAD_LEN+1];
   char msg_buf[MAX_MSG_LEN];  
   memcpy(msg_buf, &request, REQUEST_HEADER_LEN + length);
   
   //Connect to peer and send request
-  int connfd = compsys_helper_open_clientfd(peer_address.ip, peer_address.port);
-  compsys_helper_readinitb(&state, connfd); 
-  compsys_helper_writen(connfd, msg_buf, REQUEST_HEADER_LEN + length);
+  int connfd = io_assist_open_clientfd(peer_address.ip, peer_address.port);
+  io_assist_readinitb(&state, connfd); 
+  io_assist_writen(connfd, msg_buf, REQUEST_HEADER_LEN + length);
   
   //Receive response
-  ssize_t n = compsys_helper_readnb(&state, read_buf, RESPONSE_LEN);
+  ssize_t n = io_assist_readnb(&state, read_buf, RESPONSE_LEN);
   if (n < 0) {
     fprintf(stderr, "Error when reading from socket: %s\n", strerror(errno));
     close(connfd);
@@ -309,7 +309,7 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
     //Send message
     memcpy(msg_buf, &header, TRANSFER_HEADER_LEN);
     memcpy(msg_buf+TRANSFER_HEADER_LEN, read_buf, n);
-    compsys_helper_writen(connfd, msg_buf, TRANSFER_HEADER_LEN+n);
+    io_assist_writen(connfd, msg_buf, TRANSFER_HEADER_LEN+n);
   }
   
   fclose(fp);
