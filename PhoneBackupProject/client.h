@@ -9,7 +9,7 @@
 #define REQUEST_PAYLOAD_LEN   MAX_MSG_LEN - REQUEST_HEADER_LEN
 
 #define PATH_LEN 256
-//#define TRANSFER_METADATA_LEN 44 + PATH_LEN
+#define TRANSFER_METADATA_LEN 48
 
 #define TRANSFER_HEADER_LEN 44
 #define TRANSFER_PAYLOAD_LEN MAX_MSG_LEN - TRANSFER_HEADER_LEN
@@ -29,7 +29,7 @@ typedef struct {
 typedef struct {
   uint32_t path_len;
   uint32_t block_count;
-  uint32_t file_size;
+  uint64_t file_size;
   hashdata_t total_hash;
   char file_path[PATH_LEN];
 } Transfer_Metadata_t;

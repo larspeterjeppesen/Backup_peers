@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <assert.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "sha256.h"
 #include "compsys_helpers.h"
@@ -88,26 +91,6 @@ int cmp_hash(hashdata_t a, hashdata_t b) {
   return 1;
 }
 
-//man 7 ip
-
-//Initialization:
-//  Pi sends request to start transfer
-//  Desktop sends response to begin transfer
-//  Pi sends response(s) with file parts as payload
-
-//Transfer
-//  Pi begins sending the file in partitioned messages
-//  Desktop receives the partitions and writes them to disk
-//  If a block is corrupted, desktop asks for it to be sent again
-
-//Finalization
-//  Pi says that the file transfer is done
-//  Desktop informs that the transfer is successful
-//  Connection is closed
-//  Pi registers that the file has been transferred
-
-
-//Step 1: Establish connection between pi and desktop, and transfer a small file.
 
 void listen_for_conn(char* port) {
   int listenfd;
@@ -134,8 +117,6 @@ void listen_for_conn(char* port) {
     compsys_helper_readnb(&state, msg_buf, length); 
 
     memcpy(payload_buf, msg_buf, length);
-    //payload_buf[length] = 0;
-    printf("length %d\n", length);
     hashdata_t payload_hash;
     get_data_sha(payload_buf, payload_hash, length);
 
@@ -148,22 +129,49 @@ void listen_for_conn(char* port) {
     Transfer_Metadata_t metadata;
     metadata.path_len = ntohl(*(uint32_t*)payload_buf);
     metadata.block_count = ntohl(*(uint32_t*)(payload_buf+4));
-    metadata.file_size = ntohl(*(uint32_t*)(payload_buf+8));
-    memcpy(metadata.total_hash, payload_buf+12, SHA256_HASH_SIZE);
-    strcpy(metadata.file_path, payload_buf+12+SHA256_HASH_SIZE);
-    printf("%d %d %d %s\n", metadata.path_len, metadata.block_count, metadata.file_size, metadata.file_path);
+    metadata.file_size = be64toh(*(uint64_t*)(payload_buf+8));
+    memcpy(metadata.total_hash, payload_buf+16, SHA256_HASH_SIZE);
+    strcpy(metadata.file_path, payload_buf+16+SHA256_HASH_SIZE);
+    fprintf(stdout, "Request to transfer file: %s\nTotal size: %ld\nBlock count: %d\n", metadata.file_path, metadata.file_size,  metadata.block_count);
     //Add check to see if file exists already
     receive_file(connfd, command, &metadata);
   }
-
   return;
 }
 
 
+void init_dir_structure(char* file_path) {
+  char* fp = file_path;
+  char folder_name[PATH_LEN];
+  char c;
+  char partial_path[PATH_LEN];
+  memset(partial_path, 0, PATH_LEN);
+  int val;
+  struct stat statbuf = {0};
+
+  while((val = sscanf(fp, "%255[^/]%1[/]", folder_name, &c)) == 2) { 
+    if (val == -1) {
+      fprintf(stderr, "Error while scanning file path: %s\n", strerror(errno));
+      break;
+    }
+    //Assemble partial path
+    strcpy(partial_path+strlen(partial_path), folder_name);
+    partial_path[strlen(partial_path)] = '/';
+    if (stat(partial_path, &statbuf) == -1) {
+      val = mkdir(partial_path, 0777); // S_IRWXU | S_IRWXG | S_IRWXO);
+    }
+    if (val == -1) {
+      fprintf(stderr, "Error when creating dir: %s\n", strerror(errno));
+      break;
+    } 
+    fp += strlen(folder_name)+1; 
+  }
+  return;
+}
+
 
 //Called by the host that wants to receive files
 void receive_file(int connfd, uint32_t command, void* received_metadata) {
-  printf("receiving file\n");
   if (command == CMD_INITIALIZE_TRANSFER) {
     char msg_buf[MAX_MSG_LEN];
     char payload_buf[TRANSFER_PAYLOAD_LEN+1];
@@ -178,7 +186,16 @@ void receive_file(int connfd, uint32_t command, void* received_metadata) {
 
     //Receive file
     Transfer_Metadata_t metadata = *(Transfer_Metadata_t*)received_metadata;
-    int dest_fd = open(metadata.file_path, O_WRONLY | O_CREAT, S_IRUSR|S_IWUSR); 
+    char file_path[PATH_LEN];
+    char* file_path_prefix = "downloads/";
+    strcpy(file_path, file_path_prefix);
+    strcpy(file_path+strlen(file_path_prefix), metadata.file_path);
+    
+    //Check all folders exist and create them if not
+    init_dir_structure(file_path);
+
+    printf("Storing file at: %s\n", file_path);
+    int dest_fd = open(file_path, O_WRONLY | O_CREAT, S_IRUSR|S_IWUSR); 
     for (uint32_t i = 0; i < metadata.block_count; i++) {
       compsys_helper_readnb(&state, msg_buf, MAX_MSG_LEN);
       
@@ -204,7 +221,7 @@ void receive_file(int connfd, uint32_t command, void* received_metadata) {
     close(dest_fd);
     
     hashdata_t file_hash;
-    get_file_sha(metadata.file_path, file_hash, metadata.file_size);
+    get_file_sha(file_path, file_hash, metadata.file_size);
     if (cmp_hash(file_hash, metadata.total_hash) == 0) {
       fprintf(stderr, "file %s corrupted after transfer\n", metadata.file_path);
       
@@ -221,22 +238,23 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
   Transfer_Metadata_t metadata;
   memset(metadata.file_path, 0, PATH_LEN);
   printf("%s\n", file_path);
-  FILE* fp = fopen(file_path, "r");
-  assert(fp);
-  fseek(fp, 0, SEEK_END);
-  uint32_t file_size = ftell(fp);
-  fclose(fp);
+  int fd = open(file_path, O_RDONLY);
+  assert(fd != -1);
+  struct stat statbuf = {0};
+  fstat(fd, &statbuf);
+  uint64_t file_size = statbuf.st_size;
+  close(fd);
  
-  //Build request payload
+  //Build transfer_metadata
   uint32_t block_count = ceil((double)file_size/(double)(TRANSFER_PAYLOAD_LEN));
   metadata.path_len = htonl((uint32_t)strlen(file_path));
   metadata.block_count = htonl(block_count);
-  metadata.file_size = htonl(file_size); 
+  metadata.file_size = htobe64(file_size); 
   get_file_sha(file_path, metadata.total_hash, file_size); 
   strcpy(metadata.file_path, file_path);
  
-  //Build request header
-  uint32_t length = TRANSFER_HEADER_LEN+strlen(file_path)+1; 
+  //Build transfer_request header
+  uint32_t length = TRANSFER_METADATA_LEN+strlen(file_path)+1; 
   request.header.length = htonl(length);
   request.header.command = htonl((uint32_t)CMD_INITIALIZE_TRANSFER);
   get_data_sha((void*)&metadata, request.header.payload_hash, length);
@@ -273,7 +291,7 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
   }
 
   //Transfer actual file
-  fp = fopen(file_path, "r");
+  FILE* fp = fopen(file_path, "r");
   assert(fp);
   for (uint32_t i = 0; i < block_count; i++) {
     printf("Block %d\n", i);
