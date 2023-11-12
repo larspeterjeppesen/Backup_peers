@@ -26,7 +26,7 @@ Following arguments are supported:
 * `-r [Port]` - will listen for incoming connections on `[Port]`.
 One or both of these arguments must be supplied. Giving no arguments will print the above, then terminate the program.
 
-## What is currently functional
+## Current functionality and development plan
 Right now manual mode is functional on the raspberry pi and my Ubuntu machine. Currently I am working on software that will integrate my android into the chain.
 
 ### Next steps in development
