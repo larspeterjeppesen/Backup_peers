@@ -163,13 +163,13 @@ void listen_for_conn(char* port) {
 void init_dir_structure(char* file_path) {
   char* fp = file_path;
   char folder_name[PATH_LEN];
-  char c;
+  char c[2];
   char partial_path[PATH_LEN];
   memset(partial_path, 0, PATH_LEN);
   int val;
   struct stat statbuf = {0};
-
-  while((val = sscanf(fp, "%255[^/]%1[/]", folder_name, &c)) == 2) { 
+  //Extract each folder in file path and mk them if needed
+  while((val = sscanf(fp, "%255[^/]%1[/]", folder_name, c)) == 2) { 
     if (val == -1) {
       fprintf(stderr, "Error while scanning file path: %s\n", strerror(errno));
       break;
@@ -177,6 +177,7 @@ void init_dir_structure(char* file_path) {
     //Assemble partial path
     strcpy(partial_path+strlen(partial_path), folder_name);
     partial_path[strlen(partial_path)] = '/';
+    //Check if folder exists
     if (stat(partial_path, &statbuf) == -1) {
       val = mkdir(partial_path, 0777); // S_IRWXU | S_IRWXG | S_IRWXO);
     }
