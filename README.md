@@ -26,14 +26,16 @@ Following arguments are supported:
 * `-r [Port]` - will listen for incoming connections on `[Port]`.
 One or both of these arguments must be supplied. Giving no arguments will print the above, then terminate the program.
 
-## Current functionality and development plan
-Right now manual mode is functional on the raspberry pi and my Ubuntu machine. Currently I am working on software that will integrate my android into the chain.
 
-### Next steps in development
+## Steps in development
+This is a loose list of the steps that I update as I go along in the project.
+
 * Write a test suite that reasonably ensures correct file-transfer
-* Implement software that can run on my android and can transfer files from it to my raspberry pi.
+* (Done) Implement transfer of a single file between two instances of client.c than can run on my android, pi, and ubuntu machine.
+  * Add transfer error handling
+  * 
 * Implement a tracking mechanism to identify and transfer newly added files on my android and raspberry pi.
-* Implement the predefined modes, which involves:
+* Implement the predefined modes:
   * Automatised file transfers
   * Handling transfer errors
   * Handling interruptions (any of the machines turning off/going out of range)

@@ -338,8 +338,6 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
   return;
 }
 
-
-
 void* listener_thread(void* arg) {
   char* listening_port = (char*)arg;
   listen_for_conn(listening_port); 
@@ -394,6 +392,15 @@ int isValidPort(char* port_string) {
   return 1;
 }
 
+int isValidFile(char* file_path) {
+  FILE* f = fopen(file_path, "r");
+  if (f) {
+    fclose(f);
+    return 1;
+  }
+  return 0;
+}
+
 void print_help(void) {
   char* manual_usage = "For manual usage, use at least one of the following modes:\n";
   char* s = "-s [IP] [Port] [filepath]` - will send `[filepath]` to the given address.\n";
@@ -418,12 +425,18 @@ int main(int argc, char** argv) {
   if (argc == 2) {
     if (strcmp(argv[1], "--phone") == 0) {
       //Phone stuff
+      fprintf(stdout, "Mode not implemented\n");
+      return EXIT_FAILURE;
     }
     else if (strcmp(argv[1], "--pi") == 0) {
       //Pi stuff
+      fprintf(stdout, "Mode not implemented\n");
+      return EXIT_FAILURE;
     }
     else if (strcmp(argv[1], "--desktop") == 0) {
       //Desktop stuff
+      fprintf(stdout, "Mode not implemented\n");
+      return EXIT_FAILURE;
     }
     else {
       print_help();
@@ -432,18 +445,19 @@ int main(int argc, char** argv) {
   } 
   else if (3 <= argc && argc <= 7) {  
     for (int i = 1; i < argc;) {
-      // Sender mode
+      // Sender mode parsing
       if (argc - i > 0 && strcmp(argv[i], "-s") == 0) {
         assert(isValidIP(argv[i+1]));
         assert(isValidPort(argv[i+2]));
-        
+        assert(isValidFile(argv[i+3]));
+
         strcpy(target_address.ip,argv[i+1]);
         strcpy(target_address.port,argv[i+2]);
         strcpy(file_path, argv[i+3]);
         sender = true;
         i += 4;
       }
-      // Receiver mode
+      // Receiver mode parsing
       else if (strcmp(argv[i], "-r") == 0) {
         assert(isValidPort(argv[i+1]));
         strcpy(self_port,argv[i+1]);
@@ -486,97 +500,4 @@ int main(int argc, char** argv) {
   
   return EXIT_SUCCESS;
 }
-
-//  pthread_t tids[2];
-//  char* listening_port = strdup(myport);
-//  pthread_create(&tids[0], NULL, listener_thread, (void*)listening_port);
-//  
-//
-//  pthread_create(&tids[1], NULL, sender_thread, (void*)&s_args);
-//  pthread_join(tids[1], NULL);
-//  pthread_join(tids[0], NULL);
-//
-//  char* file = "files/tinyfile.txt";
-//  //Configuration 
-//  char input[256];
-//  char* line;
-//  size_t n = 0;
-//  char ip[20];
-//  char port[20];
-//  int sending = 1;
-//  char myip[IP_LEN];
-//  char myport[PORT_LEN];
-//  PeerAddress_t target_address = {0}; 
-//
-//  FILE* f = fopen("config", "r");
-//  while (1) {    
-//    printf("Enter mode:\n");  
-//    scanf("%s", input);   if (strcmp(input, "phone")==0) {
-//      while (getline(&line, &n, f) != EOF) { 
-//        sscanf(line, "%s %s %s", input, ip, port);
-//        if (strcmp(input, "phone")==0) {
-//          strcpy(myport, port);
-//        }
-//        if (strcmp(input, "pi")==0) {
-//          strcpy(target_address.ip, ip);
-//          strcpy(target_address.port, port);
-//        }
-//      }
-//      transfer_file(target_address, file); 
-//      break;
-//    }
-//    else if (strcmp(input, "pi")==0) {
-//      while (getline(&line, &n, f) != EOF) { 
-//        sscanf(line, "%s %s %s", input, ip, port);
-//        if (strcmp(input, "pi")==0) {
-//          strcpy(myport, port);
-//        }
-//        if (strcmp(input, "pc")==0) {
-//          strcpy(target_address.ip, ip);
-//          strcpy(target_address.port, port);
-//        }
-//      }
-//
-//      pthread_t tids[2];
-//      char* listening_port = strdup(myport);
-//      pthread_create(&tids[0], NULL, listener_thread, (void*)listening_port);
-//      
-//      SenderArgs_t s_args;
-//      memcpy(&s_args, &target_address, sizeof(target_address));
-//      s_args.file_path = strdup(file);
-//      pthread_create(&tids[1], NULL, sender_thread, (void*)&s_args);
-//      pthread_join(tids[1], NULL);
-//      pthread_join(tids[0], NULL);
-//      break;
-//    }
-//    else if (strcmp(input, "pc")==0) {
-//      while (getline(&line, &n, f) != EOF) { 
-//        sscanf(line, "%s %s %s", input, ip, port);
-//        if (strcmp(input, "pc")==0) {
-//          strcpy(myip, ip);
-//          strcpy(myport, port);
-//        }
-//      }
-//      printf("Listening for connection at %s:%s\n", myip, myport);
-//      listen_for_conn(myport); 
-//      break;
-//    }
-//    else if (strcmp(input, "manual")==0) {
-//    //For manual tests
-//      break;
-//    }
-//    else {
-//      printf("Command not recognized\n");
-//    }
-//  }
-//  printf("%s\n", myport);
-//  if (sending) {
-//  } else { 
-//  }
-//
-//
-//  return 0;
-//
-//}
-
 
