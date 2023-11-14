@@ -1,6 +1,12 @@
 #include "sha256.h"
 
 
+#if defined(__clang__)
+#define IS_DIR 10
+#endif
+
+#define IS_DIR DT_DIR
+
 #define MAX_MSG_LEN 1024
 
 #define RESPONSE_LEN 4
@@ -14,9 +20,11 @@
 #define TRANSFER_HEADER_LEN 44
 #define TRANSFER_PAYLOAD_LEN MAX_MSG_LEN - TRANSFER_HEADER_LEN
 
-
 #define IP_LEN 16
 #define PORT_LEN 8
+
+
+
 
 void receive_file(int connfd, uint32_t command, void* metadata);
 

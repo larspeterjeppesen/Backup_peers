@@ -454,7 +454,7 @@ void traverse_dir(char* dir) {
     element_path[strlen(element_path)] = '/';
     strcat(element_path, element->d_name);
     fprintf(stdout, "Element name: %s\nElement type: %d\n", element->d_name, element->d_type);
-    if (element->d_type == DT_DIR) {
+    if (element->d_type == IS_DIR) {
       traverse_dir(element_path);
     } else {
       push((void*)strdup(element_path));
