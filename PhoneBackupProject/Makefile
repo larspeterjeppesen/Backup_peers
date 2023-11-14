@@ -2,10 +2,7 @@ CC=gcc
 CFLAGS=-g -Wall -Wextra -pedantic -std=gnu11
 LD_FLAGS= -lpthread -lm
 
-all: client io_assist.o sha256.o last_mod
-
-last_mod: last_mod.c
-	$(CC) $(CFLAGS) $< -o $@
+all: client io_assist.o sha256.o 
 
 client: client.c client.h io_assist.o sha256.o
 	$(CC) $(CFLAGS) $< *.o -o $@  $(LD_FLAGS)

@@ -7,11 +7,15 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <dirent.h>
+
 
 #include "sha256.h"
 #include "io_assist.h"
 #include "client.h"
 
+//Set to 1 with command-line flag to enable printing workflow
+int verbose = 1;
 
 #if defined(__clang__)
 u_int32_t htonl(u_int32_t x) {
@@ -411,7 +415,71 @@ void print_help(void) {
   return;
 }
 
-int main(int argc, char** argv) { 
+uint64_t get_last_time_modified(char* filename) {
+  struct stat info = {0};
+  stat(filename, &info); 
+  return info.st_mtim.tv_sec;
+}
+
+
+// Push a file to a job queue for processing
+void push(void* work) {
+
+  char* path = (char*) work;
+
+  fprintf(stdout, "Received path to push: %s\n", path);
+  return;
+}
+
+
+//Depth-first traversal of a directory
+void traverse_dir(char* dir) {
+  DIR* dir_p = opendir(dir);
+  if (!dir_p) {
+    fprintf(stderr, "Could not open dir %s\n", dir);
+    return;
+  }
+  struct dirent* element;
+
+  if (verbose) {
+    fprintf(stdout, "Looking for files in %s\n", dir);
+  }
+
+  while ((element = readdir(dir_p)) != NULL) {
+    if (strcmp(element->d_name, "..") == 0 || strcmp(element->d_name, ".") == 0) {
+      continue;
+    }
+    char element_path[PATH_LEN] = {0};
+    strcpy(element_path, dir);
+    element_path[strlen(element_path)] = '/';
+    strcat(element_path, element->d_name);
+    if (element->d_type == DT_DIR) {
+      traverse_dir(element_path);
+    } else {
+      push((void*)strdup(element_path));
+    } 
+  }
+
+  return;
+}
+
+
+void push_files_for_transfer(void) {
+  //Traverse all folders in ../../storage/, 
+  //looking up each file in transfer_record in the process
+  //Push file for sending if file doesnt exist or is modified from last transfer
+
+  char path[PATH_LEN] = {0};
+  char* base = "../../storage";
+  strcpy(path, base);
+  traverse_dir(path);
+  return; 
+}
+
+
+int main(int argc, char** argv) {
+  push_files_for_transfer();
+  return 0;
   PeerAddress_t target_address;
   char file_path[PATH_LEN];
   char self_port[PORT_LEN];
