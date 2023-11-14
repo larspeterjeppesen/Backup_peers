@@ -394,7 +394,7 @@ int isValidPort(char* port_string) {
   return 1;
 }
 
-void print_help() {
+void print_help(void) {
   char* manual_usage = "For manual usage, use at least one of the following modes:\n";
   char* s = "-s [IP] [Port] [filepath]` - will send `[filepath]` to the given address.\n";
   char* r = "-r [Port]` - will listen for incoming connections on `[Port]`.\n";
@@ -475,9 +475,13 @@ int main(int argc, char** argv) {
   }
 
   //Now what?
-
-  pthread_join(receiver_tid, NULL);
-  pthread_join(sender_tid, NULL);
+  
+  if (receiver) {
+    pthread_join(receiver_tid, NULL);
+  }
+  if (sender) {
+    pthread_join(sender_tid, NULL);
+  }
 
   
   return EXIT_SUCCESS;
