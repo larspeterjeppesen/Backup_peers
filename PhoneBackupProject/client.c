@@ -35,7 +35,9 @@ u_int32_t ntohl(u_int32_t x) {
 u_int64_t be64toh(u_int64_t x) {
   #if BYTE_ORDER == LITTLE_ENDIAN
   unsigned char *s = (unsigned char*)&x;
-  return (u_int64_t)(s[0] << 56 | s[1] << 48 | s[2] << 40 | s[3] << 32 | s[4] << 24 | s[5] <<  16 | s[6] << 8 | s[7]);
+  u_int64_t l[8];
+  for (int i = 0; i < 8; i++) l[i] = (u_int64_t)s[i];
+  return (u_int64_t)(s[0] << 56 | l[1] << 48 | l[2] << 40 | l[3] << 32 | l[4] << 24 | l[5] <<  16 | l[6] << 8 | l[7]);
   #else
     return x;
   #endif
