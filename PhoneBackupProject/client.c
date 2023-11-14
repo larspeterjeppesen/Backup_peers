@@ -31,7 +31,7 @@ u_int32_t ntohl(u_int32_t x) {
     return x;
   #endif
 
-u_int64_t be64toh(u_int64 x) {
+u_int64_t be64toh(u_int64_t x) {
   #if BYTE_ORDER == LITTLE_ENDIAN
   unsigned char *s = (unsigned char*)&x;
   return (u_int64_t)(s[0] << 56 | s[1] << 48 | s[2] << 40 | s[3] << 32 | 
@@ -42,7 +42,16 @@ u_int64_t be64toh(u_int64 x) {
 }
 #endif
 
-
+u_int64_t htobe64(u_int64_t x) {
+  #if BYTE_ORDER == LITTLE_ENDIAN
+  unsigned char *s = (unsigned char*)&x;
+  return (u_int64_t)(s[0] << 56 | s[1] << 48 | s[2] << 40 | s[3] << 32 | 
+                      s[4] << 24 | s[5] <<  16 | s[6] << 8 | s[7]);
+  #else
+    return x;
+  #endif
+}
+#endif
 
 /*
  * Gets a sha256 hash of specified data, sourcedata. The hash itself is
