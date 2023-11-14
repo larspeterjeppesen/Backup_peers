@@ -453,6 +453,7 @@ void traverse_dir(char* dir) {
     strcpy(element_path, dir);
     element_path[strlen(element_path)] = '/';
     strcat(element_path, element->d_name);
+    fprintf(stdoud, "Element name: %s\nElement type: %s, %d\n", element->d_name, element->d_type);
     if (element->d_type == DT_DIR) {
       traverse_dir(element_path);
     } else {
