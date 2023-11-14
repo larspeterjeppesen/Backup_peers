@@ -31,13 +31,46 @@ One or both of these arguments must be supplied. Giving no arguments will print 
 This is a loose list of the steps that I update as I go along in the project.
 
 * Write a test suite that reasonably ensures correct file-transfer
-* (Done) Implement transfer of a single file between two instances of client.c than can run on my android, pi, and ubuntu machine.
-  * Add transfer error handling
-  * 
+
+Functionality:
+* (Done) Implement transfer of a single file between two instances of client.c than can run on my android, pi, and ubuntu machine. 
 * Implement a tracking mechanism to identify and transfer newly added files on my android and raspberry pi.
-* Implement the predefined modes:
-  * Automatised file transfers
-  * Handling transfer errors
-  * Handling interruptions (any of the machines turning off/going out of range)
-  * A debug flag for each mode, allowing diagnostics of all procedures
+* Implement the predefined modes.
+
+
+Robustness:
+* Debug flag, allowing diagnostics of all procedures
+* Graceful handling of connection drops.
+  * Server:
+    * Store whatever data has been correctly received
+    * Go back into listening state
+  * Client: 
+    * Go into pending state, waiting to reconnect
+    * Restart transfer of file
+
+Performance
+* Apparently my phone has 3 different CPU's on it. Benchmarking with different number of threads is necessary since I don't know if all threads of all the CPU's are employable.
+* Implement a job queue
+
+
+### Post-completion
+Some ideas to improve ease-of-use:
+* A control panel on my ubuntu machine would be neat in order to throttle/pause the backup. 
+* A backup log
+
+Maybe I'll come back and add other features here.
+
+
+## File transfer tracking
+Tracking what files have been transferred has the following components:
+
+Android-side:
+The android needs to keep a record of files that have already been transferred. In design this record, I have gone by the following principles:
+* Allow duplicate file names (Unneccessary for a single backup, but between backups we may have file `x` named `a` be altered/deleted, then introduce file `y` also named `a`. I want to have a copy of both files on my ubuntu machine, hence duplicate names must be allowed in the record.
+* Never transfer the same file twice (outside of error correction).
+
+
+Pi-side:
+
+
 
