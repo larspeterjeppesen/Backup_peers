@@ -3,9 +3,10 @@
 
 #if defined(__clang__)
 #define IS_DIR 10
+#else
+#define IS_DIR DT_DIR
 #endif
 
-#define IS_DIR DT_DIR
 
 #define MAX_MSG_LEN 1024
 
