@@ -6,6 +6,7 @@
 ## My rules
 *.mov
 *.mp4
+*.o
 
 ## Core latex/pdflatex auxiliary files:
 *.aux
