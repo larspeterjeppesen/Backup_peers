@@ -439,28 +439,23 @@ void traverse_dir(char* dir) {
     fprintf(stderr, "Could not open dir %s\n", dir);
     return;
   }
+  if (verbose) fprintf(stdout, "Looking for files in %s\n", dir);
+
   struct dirent* element;
-
-  if (verbose) {
-    fprintf(stdout, "Looking for files in %s\n", dir);
-  }
-
   while ((element = readdir(dir_p)) != NULL) {
     if (strcmp(element->d_name, "..") == 0 || strcmp(element->d_name, ".") == 0) {
       continue;
     }
     char element_path[PATH_LEN] = {0};
     strcpy(element_path, dir);
-    element_path[strlen(element_path)] = '/';
+    strcat(element_path, "/");
     strcat(element_path, element->d_name);
-    fprintf(stdout, "Element name: %s\nElement type: %d\n", element->d_name, element->d_type);
     if (element->d_type == IS_DIR) {
       traverse_dir(element_path);
     } else {
       push((void*)strdup(element_path));
     } 
   }
-
   return;
 }
 

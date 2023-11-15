@@ -1,4 +1,4 @@
-# Backup_peers
+# Confidants
 This README discusses what this piece of software does, as well as my design choices in its implementation.
 
 ## What is this?
@@ -8,7 +8,7 @@ I am aware that tools that can backup data on a phone exists, however one point 
 I am also not interested in backing up my data manually. One of the end-goals of this software is complete automatization - upon my phone connecting to my private wifi, any files that have not yet been transferred to my desktop computer will begiv transferring without any initialization from my side.
 
 ### Why C?
-I want to exercise and expand my knowledge of C. If you are looking to write a backup-tool as fast as possible, choose something else, like python fx.
+I want to exercise and expand my knowledge of C and Linux. I am fully aware that implementation-wise, there are easier languages to write this in.
 
 ## API
 The following modes are available from the commandline:
@@ -29,18 +29,19 @@ One or both of these arguments must be supplied. Giving no arguments will print 
 
 
 ## Steps in development
-This is a loose list of the steps that I update as I go along in the project.
-
+This is a loose list of the steps that I am updating as I go along in the project.
 
 **Functionality:**
 * (Done) Implement transfer of a single file between two instances of confidant.c than can run on my android, pi, and ubuntu machine. 
-* Implement a tracking mechanism to identify and transfer newly added files on my android and raspberry pi.
+* Design and implement a tracking mechanism to identify and transfer newly added files on my android and raspberry pi.
+  * Implement sqlite database
 * Implement the predefined modes.
 
-
-**Robustness:**
+**Correctness:**
 * Write a test suite that reasonably ensures correct file-transfer
 * Debug flag, allowing diagnostics of all procedures
+
+**Robustness:**
 * Server able to request specific blocks (eg. ensuing corrupted block transfer)
 * Graceful handling of connection drops.
   * Server:
@@ -51,14 +52,14 @@ This is a loose list of the steps that I update as I go along in the project.
     * Restart transfer of file
 
 **Performance:**
-* Apparently my phone has 3 different CPU's on it. Benchmarking with different number of threads is necessary since I don't know if all threads of all the CPU's are employable.
+* Apparently my phone has 3 different CPU's on it. Benchmarking with different number of threads is necessary since I don't know how many threads are employable.
 * Implement a job queue
-
+* Benchmark performance of transfer record lookup, compare to sql or other db implementations.
 
 ### Post-completion
 Some ideas to improve ease-of-use:
 * A control panel on my ubuntu machine would be neat in order to throttle/pause the backup. 
-* A backup log
+* A transfer log display
 
 Maybe I'll come back and add other features here.
 
@@ -82,7 +83,6 @@ The following procedure checks whether a file has previously been transferred, a
   * If file has not been modified since last transfer, move on to next file.
   * Else transfer file and add a new entry.
 
-Given the scope of the project, the database is simply a txt-file where each new line contains an entry.
 
 
 Pi-side:
