@@ -212,7 +212,7 @@ void receive_file(int connfd, uint32_t command, void* received_metadata) {
 }
 
 //Called by the host that wants to transfer files
-void transfer_file(PeerAddress_t peer_address, char* file_path) {
+void transfer_file(PeerAddress_t* peer_address, char* file_path) {
   Request_t request;
   Transfer_Metadata_t metadata;
   memset(metadata.file_path, 0, PATH_LEN);
@@ -246,7 +246,7 @@ void transfer_file(PeerAddress_t peer_address, char* file_path) {
   memcpy(msg_buf, &request, REQUEST_HEADER_LEN + length);
   
   //Connect to peer and send request
-  int connfd = io_assist_open_clientfd(peer_address.ip, peer_address.port);
+  int connfd = io_assist_open_clientfd(peer_address->ip, peer_address->port);
   io_assist_readinitb(&state, connfd); 
   io_assist_writen(connfd, msg_buf, REQUEST_HEADER_LEN + length);
   

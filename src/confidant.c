@@ -10,6 +10,7 @@
 #include <dirent.h>
 
 #include "transfer.h"
+#include "job_queue.h"
 #include "sha256.h"
 #include "io_assist.h"
 #include "confidant.h"
@@ -17,25 +18,41 @@
 
 
 //Set to 1 with command-line flag to enable printing workflow (not completed yet)
-int verbose = 1;
+int verbose = 0;
 
-void* listener_thread(void* arg) {
+void* worker_receive_files(void* arg) {
   char* listening_port = (char*)arg;
   listen_for_requests(listening_port); 
   return NULL;
 }
 
 typedef struct {
-  PeerAddress_t target_address;
-  char file_path[PATH_LEN];
+  char* port;
+  job_queue_t* jq;
+} ReceiverArgs_t;
+
+typedef struct {
+  PeerAddress_t* target_address;
+  job_queue_t* jq;
 } SenderArgs_t;
 
-void* sender_thread(void* arg) {
-  SenderArgs_t* args = (SenderArgs_t*)arg; 
-  printf("%s\n", args->file_path);
-  transfer_file(args->target_address, args->file_path); 
+void* worker_send_files(void* s_args) {
+  SenderArgs_t* args = (SenderArgs_t*)s_args; 
 
-  free(args);
+  while (1) {
+    char* path;
+    int ret = job_queue_pop(args->jq, (void**)&path);
+    if (ret == -1) {
+      break; //Queue destroyed, no more work
+    } else if (ret != 0) {
+      fprintf(stderr, "Error trying to pop from job_queue in worker_send_files with error: %s\n", 
+              strerror(errno));
+      break;
+    }
+    transfer_file(args->target_address, path); 
+    free(path);
+  }
+
   return NULL;
 }
 
@@ -46,17 +63,21 @@ uint64_t get_last_time_modified(char* filename) {
 }
 
 // Push a file to a job queue for processing
-void push(void* work) {
+void push_file(job_queue_t* jq, void* work) {
   char* path = (char*) work;
 
-  fprintf(stdout, "Received path to push: %s\n", path);
+  if (verbose) fprintf(stdout, "Received path to push: %s\n", path);
+  
+  //Lookup file in db
 
-  free(path);
+  job_queue_push(jq, work);
+
+
   return;
 }
 
 //Depth-first traversal of a directory
-void traverse_dir(char* dir) {
+void traverse_dir(job_queue_t* jq, char* dir) {
   DIR* dir_p = opendir(dir);
   if (!dir_p) {
     fprintf(stderr, "Could not open dir %s\n", dir);
@@ -74,31 +95,27 @@ void traverse_dir(char* dir) {
     strcat(element_path, "/");
     strcat(element_path, element->d_name);
     if (element->d_type == IS_DIR) {
-      traverse_dir(element_path);
+      traverse_dir(jq, element_path);
     } else {
-      push((void*)strdup(element_path));
+      push_file(jq, (void*)strdup(element_path));
     } 
   }
   closedir(dir_p);
   return;
 }
 
-void push_files_for_transfer(void) {
-  //Traverse all folders in ../../storage/, 
-  //looking up each file in transfer_record in the process
-  //Push file for sending if file doesnt exist or is modified from last transfer
-
+//Traverse phone directory for files to send
+void* worker_push_files_for_transfer(void* arg) {
+  job_queue_t* jq = (job_queue_t*) arg;
   char path[PATH_LEN] = {0};
   char* base = "../../storage";
   strcpy(path, base);
-  traverse_dir(path);
-  return; 
+  traverse_dir(jq, path);
+  return NULL; 
 }
 
 
 int main(int argc, char** argv) {
-  push_files_for_transfer();
-  return 0;
   PeerAddress_t target_address;
   char file_path[PATH_LEN];
   char self_port[PORT_LEN];
@@ -160,19 +177,26 @@ int main(int argc, char** argv) {
     print_help();
     return EXIT_FAILURE;
   }
-  
+
+
+  job_queue_t jq;
+  job_queue_init(&jq);
+
   pthread_t receiver_tid;
   pthread_t sender_tid;
+  pthread_t pusher_tid;
 
   if (receiver) {
-    pthread_create(&receiver_tid, NULL, listener_thread, (void*)&self_port);
+    pthread_create(&receiver_tid, NULL, worker_receive_files, (void*)&self_port);
   }
 
   if (sender) {
-    SenderArgs_t* s_args = malloc(sizeof(SenderArgs_t));
-    memcpy(&s_args->target_address, &target_address, sizeof(target_address));
-    strcpy(s_args->file_path, file_path);    
-    pthread_create(&sender_tid, NULL, sender_thread, (void*)s_args);
+    pthread_create(&pusher_tid, NULL, worker_push_files_for_transfer, (void*)&jq);
+ 
+    SenderArgs_t s_args;
+    s_args.jq = &jq;
+    s_args.target_address = &target_address;
+    pthread_create(&sender_tid, NULL, worker_send_files, (void*)&s_args);
   }
 
   //Now what?
@@ -181,6 +205,7 @@ int main(int argc, char** argv) {
     pthread_join(receiver_tid, NULL);
   }
   if (sender) {
+    pthread_join(pusher_tid, NULL);
     pthread_join(sender_tid, NULL);
   }
 

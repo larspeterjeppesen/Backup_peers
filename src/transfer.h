@@ -120,5 +120,5 @@ int cmp_hash(hashdata_t, hashdata_t);
 void listen_for_requests(char*);
 void init_dir_structure(char*);
 void receive_file(int, uint32_t, void*);
-void transfer_file(PeerAddress_t, char*);
+void transfer_file(PeerAddress_t*, char*);
 
