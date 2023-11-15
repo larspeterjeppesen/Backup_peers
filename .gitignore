@@ -2,6 +2,7 @@
 *
 !*.* 
 !*/
+!Makefile
 
 ## My rules
 *.mov
