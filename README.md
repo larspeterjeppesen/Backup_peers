@@ -42,6 +42,7 @@ This is a loose list of the steps that I am updating as I go along in the projec
 * Debug flag, allowing diagnostics of all procedures
 
 **Robustness:**
+* Add config file; remove hardcoded parts
 * Server able to request specific blocks (eg. ensuing corrupted block transfer)
 * Graceful handling of connection drops.
   * Server:
@@ -52,7 +53,7 @@ This is a loose list of the steps that I am updating as I go along in the projec
     * Restart transfer of file
 
 **Performance:**
-* Apparently my phone has 3 different CPU's on it. Benchmarking with different number of threads is necessary since I don't know how many threads are employable.
+* Apparently my phone has 3 different CPU's in it. Benchmarking with different number of threads is necessary since I don't know how many threads are employable.
 * Implement a job queue
 * Benchmark performance of transfer record lookup, compare to sql or other db implementations.
 
