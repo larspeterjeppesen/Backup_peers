@@ -2,7 +2,7 @@
 This README discusses what this piece of software does, as well as my design choices in its implementation.
 
 ## What is this?
-This piece software is a backup tool I am writing for personal use. It's purpose is to transfer data from my android phone to my Ubuntu machine over my private wifi through a raspberry pi that I use as a router. 
+Confidants is a backup tool I am writing for personal use. It's purpose is to transfer data from my android phone to my Ubuntu machine over my private wifi through a raspberry pi that I use as a router. 
 
 I am aware that tools that can backup data on a phone exists, however one point of this project is to not have my data running through machines I don't own.
 I am also not interested in backing up my data manually. One of the end-goals of this software is complete automatization - upon my phone connecting to my private wifi, any files that have not yet been transferred to my desktop computer will begiv transferring without any initialization from my side.
@@ -31,16 +31,17 @@ One or both of these arguments must be supplied. Giving no arguments will print 
 ## Steps in development
 This is a loose list of the steps that I update as I go along in the project.
 
-* Write a test suite that reasonably ensures correct file-transfer
 
-Functionality:
-* (Done) Implement transfer of a single file between two instances of client.c than can run on my android, pi, and ubuntu machine. 
+**Functionality:**
+* (Done) Implement transfer of a single file between two instances of confidant.c than can run on my android, pi, and ubuntu machine. 
 * Implement a tracking mechanism to identify and transfer newly added files on my android and raspberry pi.
 * Implement the predefined modes.
 
 
-Robustness:
+**Robustness:**
+* Write a test suite that reasonably ensures correct file-transfer
 * Debug flag, allowing diagnostics of all procedures
+* Server able to request specific blocks (eg. ensuing corrupted block transfer)
 * Graceful handling of connection drops.
   * Server:
     * Store whatever data has been correctly received
@@ -49,7 +50,7 @@ Robustness:
     * Go into pending state, waiting to reconnect
     * Restart transfer of file
 
-Performance
+**Performance:**
 * Apparently my phone has 3 different CPU's on it. Benchmarking with different number of threads is necessary since I don't know if all threads of all the CPU's are employable.
 * Implement a job queue
 

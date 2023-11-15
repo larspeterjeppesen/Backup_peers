@@ -12,7 +12,7 @@
 
 #include "sha256.h"
 #include "io_assist.h"
-#include "client.h"
+#include "confidant.h"
 
 //Set to 1 with command-line flag to enable printing workflow
 int verbose = 1;
