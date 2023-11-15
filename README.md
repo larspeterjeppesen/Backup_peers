@@ -1,4 +1,5 @@
 # Backup_peers
+This README discusses what this piece of software does, as well as my design choices in its implementation.
 
 ## What is this?
 This piece software is a backup tool I am writing for personal use. It's purpose is to transfer data from my android phone to my Ubuntu machine over my private wifi through a raspberry pi that I use as a router. 
@@ -68,6 +69,19 @@ Android-side:
 The android needs to keep a record of files that have already been transferred. In design this record, I have gone by the following principles:
 * Allow duplicate file names (Unneccessary for a single backup, but between backups we may have file `x` named `a` be altered/deleted, then introduce file `y` also named `a`. I want to have a copy of both files on my ubuntu machine, hence duplicate names must be allowed in the record.
 * Never transfer the same file twice (outside of error correction).
+
+
+To accomodate for these points, I have decided on a database where entries have the following data associated:
+* File name (including path) | Transfer date
+
+The following procedure checks whether a file has previously been transferred, and transfers it if not:
+* Locate all entries of file in database.
+* If not in database, transfer file, insert into database
+* Else:
+  * If file has not been modified since last transfer, move on to next file.
+  * Else transfer file and add a new entry.
+
+Given the scope of the project, the database is simply a txt-file where each new line contains an entry.
 
 
 Pi-side:
