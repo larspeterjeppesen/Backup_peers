@@ -10,6 +10,9 @@ I am also not interested in backing up my data manually. One of the end-goals of
 ### Why C?
 I want to exercise and expand my knowledge of C and Linux. I am fully aware that implementation-wise, there are easier languages to write this in.
 
+### Disclaimer
+I am writing this project for my own personal use. This repo is made public to showcase my work, and for anyone interested in network-programming in C. If the software runs on my machines, it is good enough - although I do write the code to not be platform specific when it is not too inconvenient. Therefore, use at your own discretion.
+
 ## API
 The following modes are available from the commandline:
 
@@ -32,6 +35,7 @@ One or both of these arguments must be supplied. Giving no arguments will print 
 This is a loose list of the steps that I am updating as I go along in the project.
 
 **Functionality:**
+* (Done) Design and implement a file transfer protocol.
 * (Done) Implement transfer of a single file between two instances of confidant.c than can run on my android, pi, and ubuntu machine. 
 * Design and implement a tracking mechanism to identify and transfer newly added files on my android and raspberry pi.
   * Implement sqlite database
@@ -42,7 +46,7 @@ This is a loose list of the steps that I am updating as I go along in the projec
 * Debug flag, allowing diagnostics of all procedures
 
 **Robustness:**
-* Add config file; remove hardcoded parts
+* Add config file; remove hardcoded parts.
 * Server able to request specific blocks (eg. ensuing corrupted block transfer)
 * Graceful handling of connection drops.
   * Server:
@@ -54,7 +58,7 @@ This is a loose list of the steps that I am updating as I go along in the projec
 
 **Performance:**
 * Apparently my phone has 3 different CPU's in it. Benchmarking with different number of threads is necessary since I don't know how many threads are employable.
-* Implement a job queue
+* (Done) Implement a job queue utilized by threads.
 * Benchmark performance of transfer record lookup, compare to sql or other db implementations.
 
 ### Post-completion
