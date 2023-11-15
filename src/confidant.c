@@ -424,13 +424,13 @@ uint64_t get_last_time_modified(char* filename) {
 
 // Push a file to a job queue for processing
 void push(void* work) {
-
   char* path = (char*) work;
 
   fprintf(stdout, "Received path to push: %s\n", path);
+
+  free(path);
   return;
 }
-
 
 //Depth-first traversal of a directory
 void traverse_dir(char* dir) {
@@ -456,9 +456,9 @@ void traverse_dir(char* dir) {
       push((void*)strdup(element_path));
     } 
   }
+  closedir(dir_p);
   return;
 }
-
 
 void push_files_for_transfer(void) {
   //Traverse all folders in ../../storage/, 
