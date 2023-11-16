@@ -2,13 +2,16 @@
 This README discusses what this piece of software does, as well as my design choices in its implementation.
 
 ## What is this?
-Confidants is a backup tool I am writing for personal use. It's purpose is to transfer data from my android phone to my Ubuntu machine over my private wifi through a raspberry pi that I use as a router. 
+Confidants is an automatised backup tool, designed to transfer data from my android phone, through my raspberry pi router, to my Ubuntu machine. 
 
-I am aware that tools that can backup data on a phone exists, however one point of this project is to not have my data running through machines I don't own.
-I am also not interested in backing up my data manually. One of the end-goals of this software is complete automatization - upon my phone connecting to my private wifi, any files that have not yet been transferred to my desktop computer will begiv transferring without any initialization from my side.
+### Why not use existing tools?
+By writing the whole thing from scratch, we:
+* Avoid sharing data with cloud service providers.
+* Have complete control over the process.
+* Gain knowledge of the systems worked on.
 
 ### Why C?
-I want to exercise and expand my knowledge of C and Linux. I am fully aware that implementation-wise, there are easier languages to write this in.
+I want to exercise and expand my knowledge of C and Linux. I am fully aware that there are languages more convenient for this process.
 
 ### Disclaimer
 I am writing this project for my own personal use. This repo is made public to showcase my work, and for anyone interested in network-programming in C. If the software runs on my machines, it is good enough - although I do write the code to not be platform specific when it is not too inconvenient. Therefore, use at your own discretion.
@@ -18,18 +21,17 @@ The following modes are available from the commandline:
 
 ### Predefined modes
 * "--phone"
-  * Run as sender only. In this mode, all files from host that have not already been transferred will be transferred to the pi as soon as a connection can be established between them.
+  * In this mode, all files from host that have not already been transferred will be transferred to the pi as soon as a connection can be established between them.
 * "--pi"
-  * Run as both receiver and sender. Receiver portion will receive files from phone and store them locally. Sender portion will send any files gotten from the receiver portion, and send them to the desktop pc as soon as a connection can be established between them.
+  * Receive files from phone and store them locally. Send received files to Linux machine.
 * "--desktop"
-  * Run as receiver only. Will receive files from pi and store them locally.
+  * Receive files from pi and store them locally.
 
 ### Manual mode
 Following arguments are supported:
 * `-s [IP] [Port] [filepath]` - will send the file located at `[filepath]` to the given address.
 * `-r [Port]` - will listen for incoming connections on `[Port]`.
 One or both of these arguments must be supplied. Giving no arguments will print the above, then terminate the program.
-
 
 ## Steps in development
 This is a loose list of the steps that I am updating as I go along in the project.
@@ -57,8 +59,8 @@ This is a loose list of the steps that I am updating as I go along in the projec
     * Restart transfer of file
 
 **Performance:**
-* Apparently my phone has 3 different CPU's in it. Benchmarking with different number of threads is necessary since I don't know how many threads are employable.
 * (Done) Implement a job queue utilized by threads.
+* Apparently my phone has 3 different CPU's in it. Benchmarking with different number of threads is necessary since I don't know how many threads are employable.
 * Benchmark performance of transfer record lookup, compare to sql or other db implementations.
 
 ### Post-completion
@@ -68,29 +70,17 @@ Some ideas to improve ease-of-use:
 
 Maybe I'll come back and add other features here.
 
-
 ## File transfer tracking
-Tracking what files have been transferred has the following components:
-
-Android-side:
-The android needs to keep a record of files that have already been transferred. In design this record, I have gone by the following principles:
-* Allow duplicate file names (Unneccessary for a single backup, but between backups we may have file `x` named `a` be altered/deleted, then introduce file `y` also named `a`. I want to have a copy of both files on my ubuntu machine, hence duplicate names must be allowed in the record.
+**Android-side**:
+The android needs to keep a record of files that have already been transferred. In designing this record, I have gone by the following principles:
+* Allow duplicate file names (Unneccessary for a single backup, but between backups we may have file `x` named `a` be altered/deleted, then introduce file `y` also named `a`. I want to have a copy of both files on my Linux machine, hence duplicate names must be allowed in the record.
 * Never transfer the same file twice (outside of error correction).
 
-
-To accomodate for these points, I have decided on a database where entries have the following data associated:
+To accomodate for these points, we can use the following database entry:
 * File name (including path) | Transfer date
 
-The following procedure checks whether a file has previously been transferred, and transfers it if not:
-* Locate all entries of file in database.
-* If not in database, transfer file, insert into database
-* Else:
-  * If file has not been modified since last transfer, move on to next file.
-  * Else transfer file and add a new entry.
-
-
-
-Pi-side:
+**Pi-side:**
+(work in progress)
 
 
 
