@@ -45,6 +45,8 @@ int isValidFile(char* file_path) {
   return 0;
 }
 
+
+
 void print_help(void) {
   char* manual_usage = "For manual usage, use at least one of the following modes:\n";
   char* s = "-s [IP] [Port] [filepath]` - will send `[filepath]` to the given address.\n";

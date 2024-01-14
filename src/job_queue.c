@@ -33,12 +33,12 @@ int job_queue_push(job_queue_t* jq, void* data) {
     fprintf(stderr, "Tried to push job to invalid job_queue\n");
     return 1;
   }
-
   if (pthread_mutex_lock(&jq->mutex) != 0) {
     fprintf(stderr, "Failed to lock mutex in job_queue_push with error: %s\n", strerror(errno));
     return 1;
   }
 
+  printf("test\n");
   while (jq->tail + 1 == jq->head) { 
     pthread_cond_wait(&jq->full, &jq->mutex);
   }
@@ -75,6 +75,7 @@ int job_queue_pop(job_queue_t* jq, void** dest) {
 
   if (pthread_mutex_lock(&jq->mutex) != 0) {
     fprintf(stderr, "Failed to lock mutex in job_queue_pop with error: %s\n", strerror(errno));
+    printf("test\n");
     return 1;
   }
 

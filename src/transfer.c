@@ -11,7 +11,7 @@
 #include "sha256.h"
 #include "io_assist.h"
 
-
+int t_verbose = 1;
 
 /*
  * Gets a sha256 hash of specified data, sourcedata. The hash itself is
@@ -69,50 +69,91 @@ int cmp_hash(hashdata_t a, hashdata_t b) {
   return 1;
 }
 
-
-void listen_for_requests(char* port) {
+void listen_for_connection(char* port) {
   int listenfd;
   int connfd;
   struct sockaddr_storage clientaddr;
   socklen_t clientlen;
-  io_assist_state_t state;
-  char msg_buf[MAX_MSG_LEN];
-
   listenfd = io_assist_open_listenfd(port);
   clientlen = sizeof(struct sockaddr_storage);
   connfd = accept(listenfd, (struct sockaddr*) &clientaddr, &clientlen);
- 
+  receive_files(connfd);
+  return;
+}
+
+void receive_files(int connfd) {
+  char payload_buf[MAX_MSG_LEN];
+  io_assist_state_t state;
   io_assist_readinitb(&state, connfd);
-  io_assist_readnb(&state, msg_buf, REQUEST_HEADER_LEN);
 
-  uint32_t length = ntohl(*(uint32_t*)msg_buf);
-  uint32_t command = ntohl(*(uint32_t*)(msg_buf+4));
-  hashdata_t request_hash;
-  memcpy(request_hash, msg_buf+8, SHA256_HASH_SIZE);
+  char* file_path_prefix = "downloads/";
+  //Receive files
+  while(1) {  
+    //Read and parse file data
+    io_assist_readnb(&state, payload_buf, FILEDATA_HEADER_LEN);
+    uint32_t path_len = ntohl(*(uint32_t*)payload_buf);
+    uint32_t block_count = ntohl(*(uint32_t*)(payload_buf+4));
+    uint64_t file_size = be64toh(*(uint64_t*)(payload_buf+8));
+    hashdata_t file_hash;
+    memcpy(file_hash, payload_buf+16, SHA256_HASH_SIZE);
 
-  if (command == CMD_INITIALIZE_TRANSFER) {
-    char payload_buf[length+1];
-    io_assist_readnb(&state, msg_buf, length); 
+    //Read and init destination path
+    io_assist_readnb(&state, payload_buf, path_len);
+    char file_path[PATH_LEN] = {0};
+    strncpy(file_path, file_path_prefix, strlen(file_path_prefix));
+    strncpy(file_path+strlen(file_path_prefix), payload_buf, path_len);
+    init_dir_structure(file_path);
 
-    memcpy(payload_buf, msg_buf, length);
-    hashdata_t payload_hash;
-    get_data_sha(payload_buf, payload_hash, length);
+    if (t_verbose) fprintf(stdout, "Request to transfer file: %s\nTotal size: %ld\nBlock count: %d\n", file_path, file_size, block_count);
 
-    if (cmp_hash(payload_hash, request_hash) == 0) {
-      fprintf(stderr, "Corrupted request received\n");
-      close(connfd);
-      return;   
+    //Check if file has been received already
+
+
+    //File is new, accept it
+    uint32_t response = htonl(ACCEPT_FILE);
+    printf("%d\n", ntohl(response));
+    io_assist_writen(connfd, &response, RESPONSE_LEN);
+
+    //Receive file 
+    if (t_verbose) printf("File transfer request accepted, storing at: %s\n", file_path);
+    int dest_fd = open(file_path, O_WRONLY | O_CREAT, S_IRUSR|S_IWUSR); 
+    for (uint32_t i = 0; i < block_count; i++) {
+      //Read and parse FileData header
+      io_assist_readnb(&state, payload_buf, PACKAGE_HEADER_LEN); 
+      uint32_t payload_length = ntohl(*(uint32_t*)payload_buf);
+      uint32_t block_number = ntohl(*(uint32_t*)(payload_buf+4));
+      hashdata_t block_hash;
+      memcpy(block_hash, payload_buf+8, SHA256_HASH_SIZE);
+
+      //Read payload
+      io_assist_readnb(&state, payload_buf, payload_length);
+
+      //Verify payload
+      hashdata_t payload_hash;
+      get_data_sha(payload_buf, payload_hash, payload_length); 
+      if (cmp_hash(payload_hash, block_hash) == 0) {
+        fprintf(stderr, "Corrupted payload received at block, exiting %d\n", i);
+        exit(1);
+      }
+      //Write package payload to disk
+      write(dest_fd, payload_buf, payload_length);
     }
-
-    Transfer_Metadata_t metadata;
-    metadata.path_len = ntohl(*(uint32_t*)payload_buf);
-    metadata.block_count = ntohl(*(uint32_t*)(payload_buf+4));
-    metadata.file_size = be64toh(*(uint64_t*)(payload_buf+8));
-    memcpy(metadata.total_hash, payload_buf+16, SHA256_HASH_SIZE);
-    strcpy(metadata.file_path, payload_buf+16+SHA256_HASH_SIZE);
-    fprintf(stdout, "Request to transfer file: %s\nTotal size: %ld\nBlock count: %d\n", metadata.file_path, metadata.file_size,  metadata.block_count);
-    //Add check to see if file exists already
-    receive_file(connfd, command, &metadata);
+    
+    //Verify file integrity
+    hashdata_t actual_file_hash;
+    get_file_sha(file_path, actual_file_hash, file_size);
+    if (cmp_hash(actual_file_hash, file_hash) == 0) {
+      //Report failed transfer
+      fprintf(stderr, "file %s corrupted after transfer\n", file_path); 
+      response = htonl(FILE_CORRUPTED);
+      io_assist_writen(connfd, &response, 4);
+      exit(0);
+    }
+    
+    //Report succesfull transfer
+    if (t_verbose) fprintf(stdout, "File correctly received\n");
+    response = htonl(FILE_RECEIVED);
+    io_assist_writen(connfd, &response, 4);
   }
   return;
 }
@@ -149,149 +190,85 @@ void init_dir_structure(char* file_path) {
 }
 
 
-//Called by the host that wants to receive files
-void receive_file(int connfd, uint32_t command, void* received_metadata) {
-  if (command == CMD_INITIALIZE_TRANSFER) {
-    char msg_buf[MAX_MSG_LEN];
-    char payload_buf[TRANSFER_PAYLOAD_LEN+1];
-    io_assist_state_t state;
-    io_assist_readinitb(&state, connfd); 
-
-    //Accept incoming transfer
-    Response_t response;
-    response.status = htonl(OK);
-    memcpy(msg_buf, &response, RESPONSE_LEN);
-    io_assist_writen(connfd, msg_buf, RESPONSE_LEN);
-
-    //Receive file
-    Transfer_Metadata_t metadata = *(Transfer_Metadata_t*)received_metadata;
-    char file_path[PATH_LEN];
-    char* file_path_prefix = "downloads/";
-    strcpy(file_path, file_path_prefix);
-    strcpy(file_path+strlen(file_path_prefix), metadata.file_path);
-    
-    //Check all folders exist and create them if not
-    init_dir_structure(file_path);
-
-    printf("Storing file at: %s\n", file_path);
-    int dest_fd = open(file_path, O_WRONLY | O_CREAT, S_IRUSR|S_IWUSR); 
-    for (uint32_t i = 0; i < metadata.block_count; i++) {
-      io_assist_readnb(&state, msg_buf, MAX_MSG_LEN);
-      
-      uint32_t length = ntohl(*(uint32_t*)msg_buf);
-      uint32_t status = ntohl(*(uint32_t*)(msg_buf+4));
-      uint32_t block_number = ntohl(*(uint32_t*)(msg_buf+8));
-      hashdata_t block_hash;
-      memcpy(block_hash, msg_buf+12, SHA256_HASH_SIZE);
-      memcpy(payload_buf, msg_buf+TRANSFER_HEADER_LEN, length);
-      payload_buf[length] = 0;
-
-      hashdata_t payload_hash;
-      get_data_sha(payload_buf, payload_hash, length);
-      
-      if (cmp_hash(payload_hash, block_hash) == 0) {
-        fprintf(stderr, "Corrupted payload received at block %d\n", i);
-        break;
-      }
-     
-      write(dest_fd, payload_buf, length);
-    }
-    close(connfd);
-    close(dest_fd);
-    
-    hashdata_t file_hash;
-    get_file_sha(file_path, file_hash, metadata.file_size);
-    if (cmp_hash(file_hash, metadata.total_hash) == 0) {
-      fprintf(stderr, "file %s corrupted after transfer\n", metadata.file_path);
-      
-    }
-
-  printf("File received\n");
-  }
-  return;
-}
-
 //Called by the host that wants to transfer files
-void transfer_file(PeerAddress_t* peer_address, char* file_path) {
-  Request_t request;
-  Transfer_Metadata_t metadata;
-  memset(metadata.file_path, 0, PATH_LEN);
-  printf("%s\n", file_path);
+uint32_t transfer_file(int connfd, char* file_path) {
+  FileData_t file_data; 
+  memset(file_data.file_path, 0, PATH_LEN);
+  if (t_verbose) printf("Initializing transfer for file: %s\n", file_path);
   int fd = open(file_path, O_RDONLY);
   assert(fd != -1);
   struct stat statbuf = {0};
   fstat(fd, &statbuf);
   uint64_t file_size = statbuf.st_size;
   close(fd);
- 
-  //Build transfer_metadata
-  uint32_t block_count = ceil((double)file_size/(double)(TRANSFER_PAYLOAD_LEN));
-  metadata.path_len = htonl((uint32_t)strlen(file_path));
-  metadata.block_count = htonl(block_count);
-  metadata.file_size = htobe64(file_size); 
-  get_file_sha(file_path, metadata.total_hash, file_size); 
-  strcpy(metadata.file_path, file_path);
- 
-  //Build transfer_request header
-  uint32_t length = TRANSFER_METADATA_LEN+strlen(file_path)+1; 
-  request.header.length = htonl(length);
-  request.header.command = htonl((uint32_t)CMD_INITIALIZE_TRANSFER);
-  get_data_sha((void*)&metadata, request.header.payload_hash, length);
 
-  //Assemble request
-  memcpy(request.payload, &metadata, length);
-  io_assist_state_t state;
-  char read_buf[TRANSFER_PAYLOAD_LEN+1];
-  char msg_buf[MAX_MSG_LEN];  
-  memcpy(msg_buf, &request, REQUEST_HEADER_LEN + length);
+  //FileData header data
+  file_data.path_len = htonl((uint32_t)strlen(file_path));
+  uint32_t block_count = ceil((double)file_size/(double)(PACKAGE_PAYLOAD_LEN));
+  file_data.block_count = htonl(block_count);
+  file_data.file_size = htobe64(file_size); 
+  get_file_sha(file_path, file_data.file_hash, file_size); 
+  strcpy(file_data.file_path, file_path);
   
-  //Connect to peer and send request
-  int connfd = io_assist_open_clientfd(peer_address->ip, peer_address->port);
-  io_assist_readinitb(&state, connfd); 
-  io_assist_writen(connfd, msg_buf, REQUEST_HEADER_LEN + length);
+  printf("path len %d\n", file_data.path_len); 
   
+  char send_buf[MAX_MSG_LEN];
+  memcpy(send_buf, &file_data.path_len, 4);
+  memcpy(send_buf+4, &file_data.block_count, 4);
+  memcpy(send_buf+8, &file_data.file_size, 8);
+  memcpy(send_buf+16, file_data.file_hash, SHA256_HASH_SIZE);
+
+  //Send FileData to receiver
+  io_assist_writen(connfd, send_buf, FILEDATA_HEADER_LEN+strlen(file_path));
+ 
   //Receive response
-  ssize_t n = io_assist_readnb(&state, read_buf, RESPONSE_LEN);
-  if (n < 0) {
-    fprintf(stderr, "Error when reading from socket: %s\n", strerror(errno));
-    close(connfd);
-    return;
-  }
-  if (n != RESPONSE_LEN) {
-    fprintf(stderr, 
-            "Incorrect number of bytes read from socket. Expected %d, read %ld.\n", RESPONSE_LEN, n);
-  }
+  char response_buf[MAX_MSG_LEN];
+  io_assist_state_t state;
+  io_assist_readinitb(&state, connfd);  
+  
+  ssize_t n = io_assist_readnb(&state, response_buf, RESPONSE_LEN);
 
-  uint32_t status = ntohl(*(uint32_t*)read_buf);
-  if (status != OK) {
-    fprintf(stderr, "Transfer initialization failed with status %d\n", status);
-    close(connfd);
-    return;
+  uint32_t response = ntohl(*(uint32_t*)response_buf);
+  printf("%d\n", response);
+  printf("%d\n", ACCEPT_FILE);
+  if (response == REJECT_FILE) {
+    fprintf(stdout, "File rejected, continuing...\n");
+    return -1;
+  } else if (response != ACCEPT_FILE) {
+    fprintf(stdout, "Malformed response, exiting\n");
+    exit(1);
+  } else {
+    if (t_verbose) fprintf(stdout, "Transfer request accepted, starting transfer\n");
   }
 
   //Transfer actual file
   FILE* fp = fopen(file_path, "r");
-  assert(fp);
-  for (uint32_t i = 0; i < block_count; i++) {
-    printf("Block %d\n", i);
-    //Read data to send
-    size_t n = fread(read_buf, sizeof(char), TRANSFER_PAYLOAD_LEN, fp); 
-    read_buf[n] = 0;
+  char read_buf[PACKAGE_PAYLOAD_LEN];
+  char msg_buf[MAX_MSG_LEN]; 
+  for (int i = 0; i < block_count; i++) {
+    //Flush buffer
+    memset(read_buf, 0, PACKAGE_PAYLOAD_LEN);
+    memset(msg_buf, 0, MAX_MSG_LEN);
+
+    //Read data from file to send
+    size_t n = fread(read_buf, sizeof(char), PACKAGE_PAYLOAD_LEN, fp); 
    
     //Build message
-    TransferHeader_t header;
-    header.length = htonl(n);
-    header.status = htonl(OK);
-    header.block_number = htonl(i);
-    get_data_sha(read_buf, header.block_hash, n);
+    PackageData_t package;
+    package.length = htonl(n);
+    package.block_number = htonl(i);
+    get_data_sha(read_buf, package.block_hash, n);
 
     //Send message
-    memcpy(msg_buf, &header, TRANSFER_HEADER_LEN);
-    memcpy(msg_buf+TRANSFER_HEADER_LEN, read_buf, n);
-    io_assist_writen(connfd, msg_buf, TRANSFER_HEADER_LEN+n);
+    memcpy(msg_buf, &package, PACKAGE_HEADER_LEN);
+    memcpy(msg_buf+PACKAGE_HEADER_LEN, read_buf, n);
+    io_assist_writen(connfd, msg_buf, PACKAGE_HEADER_LEN+n);
   }
-  
   fclose(fp);
-  close(connfd);
-  return;
+
+  //Read response from receiver
+  io_assist_readnb(&state, response_buf, RESPONSE_LEN);
+  
+  response = ntohl(*(uint32_t*)response_buf);
+  return response;
 }
