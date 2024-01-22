@@ -78,6 +78,7 @@ void listen_for_connection(char* port) {
   clientlen = sizeof(struct sockaddr_storage);
   connfd = accept(listenfd, (struct sockaddr*) &clientaddr, &clientlen);
   receive_files(connfd);
+  close(connfd);
   return;
 }
 
@@ -85,12 +86,29 @@ void receive_files(int connfd) {
   char payload_buf[MAX_MSG_LEN];
   io_assist_state_t state;
   io_assist_readinitb(&state, connfd);
+  ssize_t bytes_read;
+ 
+  //printf("receiving files on connfd %d\n", connfd);
+
 
   char* file_path_prefix = "downloads/";
   //Receive files
   while(1) {  
+    memset(payload_buf, 0, MAX_MSG_LEN);
     //Read and parse file data
-    io_assist_readnb(&state, payload_buf, FILEDATA_HEADER_LEN);
+    bytes_read = io_assist_readnb(&state, payload_buf, FILEDATA_HEADER_LEN);
+    //printf("Read %ld bytes from expected FILEDATA_HEADER, expected %d bytes\n", bytes_read, FILEDATA_HEADER_LEN);
+  
+    int sum = 0;
+    for (int i = 0; i < FILEDATA_HEADER_LEN; i++) {
+      sum |= payload_buf[i]; 
+    }     
+    if (sum == 0) {
+      printf("Received termination signal from sender\n"); 
+      break;
+    }
+
+    //Parse received FileData header
     uint32_t path_len = ntohl(*(uint32_t*)payload_buf);
     uint32_t block_count = ntohl(*(uint32_t*)(payload_buf+4));
     uint64_t file_size = be64toh(*(uint64_t*)(payload_buf+8));
@@ -98,7 +116,7 @@ void receive_files(int connfd) {
     memcpy(file_hash, payload_buf+16, SHA256_HASH_SIZE);
 
     //Read and init destination path
-    io_assist_readnb(&state, payload_buf, path_len);
+    bytes_read = io_assist_readnb(&state, payload_buf, path_len);
     char file_path[PATH_LEN] = {0};
     strncpy(file_path, file_path_prefix, strlen(file_path_prefix));
     strncpy(file_path+strlen(file_path_prefix), payload_buf, path_len);
@@ -111,14 +129,17 @@ void receive_files(int connfd) {
 
     //File is new, accept it
     uint32_t response = htonl(ACCEPT_FILE);
-    printf("%d\n", ntohl(response));
-    io_assist_writen(connfd, &response, RESPONSE_LEN);
+    //printf("Sending response: %d\n", ACCEPT_FILE);
+    char buffer[4];
+    memcpy(buffer, &response, 4);
+    io_assist_writen(connfd, buffer, RESPONSE_LEN);
 
-    //Receive file 
+    //Receive file
     if (t_verbose) printf("File transfer request accepted, storing at: %s\n", file_path);
-    int dest_fd = open(file_path, O_WRONLY | O_CREAT, S_IRUSR|S_IWUSR); 
+    int dest_fd = open(file_path, O_WRONLY | O_CREAT, S_IRUSR|S_IWUSR);
+    assert(dest_fd != -1);
     for (uint32_t i = 0; i < block_count; i++) {
-      //Read and parse FileData header
+      //Read and parse PackageData header
       io_assist_readnb(&state, payload_buf, PACKAGE_HEADER_LEN); 
       uint32_t payload_length = ntohl(*(uint32_t*)payload_buf);
       uint32_t block_number = ntohl(*(uint32_t*)(payload_buf+4));
@@ -189,6 +210,13 @@ void init_dir_structure(char* file_path) {
   return;
 }
 
+void signal_terminate_connection(int connfd) {
+  FileData_t file_data;
+  memset(&file_data, 0, FILEDATA_HEADER_LEN);
+  io_assist_writen(connfd, &file_data, FILEDATA_HEADER_LEN);
+  close(connfd);
+  return;
+}
 
 //Called by the host that wants to transfer files
 uint32_t transfer_file(int connfd, char* file_path) {
@@ -201,7 +229,6 @@ uint32_t transfer_file(int connfd, char* file_path) {
   fstat(fd, &statbuf);
   uint64_t file_size = statbuf.st_size;
   close(fd);
-
   //FileData header data
   file_data.path_len = htonl((uint32_t)strlen(file_path));
   uint32_t block_count = ceil((double)file_size/(double)(PACKAGE_PAYLOAD_LEN));
@@ -209,14 +236,14 @@ uint32_t transfer_file(int connfd, char* file_path) {
   file_data.file_size = htobe64(file_size); 
   get_file_sha(file_path, file_data.file_hash, file_size); 
   strcpy(file_data.file_path, file_path);
-  
-  printf("path len %d\n", file_data.path_len); 
-  
+ 
   char send_buf[MAX_MSG_LEN];
   memcpy(send_buf, &file_data.path_len, 4);
   memcpy(send_buf+4, &file_data.block_count, 4);
   memcpy(send_buf+8, &file_data.file_size, 8);
   memcpy(send_buf+16, file_data.file_hash, SHA256_HASH_SIZE);
+  memcpy(send_buf+16+SHA256_HASH_SIZE, file_path, strlen(file_path));
+
 
   //Send FileData to receiver
   io_assist_writen(connfd, send_buf, FILEDATA_HEADER_LEN+strlen(file_path));
@@ -229,8 +256,6 @@ uint32_t transfer_file(int connfd, char* file_path) {
   ssize_t n = io_assist_readnb(&state, response_buf, RESPONSE_LEN);
 
   uint32_t response = ntohl(*(uint32_t*)response_buf);
-  printf("%d\n", response);
-  printf("%d\n", ACCEPT_FILE);
   if (response == REJECT_FILE) {
     fprintf(stdout, "File rejected, continuing...\n");
     return -1;
@@ -245,14 +270,13 @@ uint32_t transfer_file(int connfd, char* file_path) {
   FILE* fp = fopen(file_path, "r");
   char read_buf[PACKAGE_PAYLOAD_LEN];
   char msg_buf[MAX_MSG_LEN]; 
-  for (int i = 0; i < block_count; i++) {
+  for (uint32_t i = 0; i < block_count; i++) {
     //Flush buffer
     memset(read_buf, 0, PACKAGE_PAYLOAD_LEN);
     memset(msg_buf, 0, MAX_MSG_LEN);
 
     //Read data from file to send
     size_t n = fread(read_buf, sizeof(char), PACKAGE_PAYLOAD_LEN, fp); 
-   
     //Build message
     PackageData_t package;
     package.length = htonl(n);
@@ -268,7 +292,7 @@ uint32_t transfer_file(int connfd, char* file_path) {
 
   //Read response from receiver
   io_assist_readnb(&state, response_buf, RESPONSE_LEN);
-  
   response = ntohl(*(uint32_t*)response_buf);
+  if (t_verbose) fprintf(stdout, "File transfer succesful\n");
   return response;
 }

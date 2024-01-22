@@ -28,6 +28,30 @@ int job_queue_init(job_queue_t* jq) {
   return 0;
 }
 
+int job_queue_is_empty(job_queue_t* jq) {
+  if (jq == NULL) {
+    fprintf(stderr, "Tried to check size of invalid job queue (NULL POINTER)\n");
+    return 1;
+  }  
+  
+  int retval;
+
+  if (pthread_mutex_lock(&jq->mutex) != 0) {
+    fprintf(stderr, "Failed to lock mutex in job_queue_is_empty with error: %s\n", strerror(errno));
+    return 1;
+  }
+
+  retval = jq->head == jq->tail ? 1 : 0;   
+  
+  if (pthread_mutex_unlock(&jq->mutex) != 0) {
+    fprintf(stderr, "Failed to unlock mutex in job_queue_is_empty with error: %s\n", strerror(errno));
+    return 1;
+  } 
+
+  return retval;
+}
+
+
 int job_queue_push(job_queue_t* jq, void* data) {
   if (jq == NULL) {
     fprintf(stderr, "Tried to push job to invalid job_queue\n");
@@ -38,7 +62,6 @@ int job_queue_push(job_queue_t* jq, void* data) {
     return 1;
   }
 
-  printf("test\n");
   while (jq->tail + 1 == jq->head) { 
     pthread_cond_wait(&jq->full, &jq->mutex);
   }
@@ -50,10 +73,10 @@ int job_queue_push(job_queue_t* jq, void* data) {
     }
     return 1;
   }
-
+  
   jq->jobs[jq->tail] = data;
   jq->tail++;
-  
+ 
   if (pthread_cond_signal(&jq->empty) != 0) { 
     fprintf(stderr, "Failed to cond signal in job_queue_push with error: %s\n", strerror(errno));
   }
@@ -67,6 +90,7 @@ int job_queue_push(job_queue_t* jq, void* data) {
 }
 
 
+
 int job_queue_pop(job_queue_t* jq, void** dest) {
   if (jq == NULL) {
     fprintf(stderr, "Tried to pop from invalid job_queue\n");
@@ -75,7 +99,6 @@ int job_queue_pop(job_queue_t* jq, void** dest) {
 
   if (pthread_mutex_lock(&jq->mutex) != 0) {
     fprintf(stderr, "Failed to lock mutex in job_queue_pop with error: %s\n", strerror(errno));
-    printf("test\n");
     return 1;
   }
 
@@ -83,14 +106,14 @@ int job_queue_pop(job_queue_t* jq, void** dest) {
     pthread_cond_wait(&jq->empty, &jq->mutex);
   }
 
-  if (jq->is_destroyed) {
+  if (jq->head == jq->tail && jq->is_destroyed) {
     if (pthread_mutex_unlock(&jq->mutex) != 0) {
       fprintf(stderr, "Failed to unlock mutex in job_queue_pop with error: %s\n", strerror(errno));
       return 1;
     }
+    pthread_mutex_unlock(&jq->mutex);
     return -1;
   }
-
   *dest = jq->jobs[jq->head];
   jq->head++;
 
@@ -121,7 +144,7 @@ int job_queue_destroy(job_queue_t* jq) {
 
   //Wait for all threads sitting in pop to finish
   while (jq->tail != jq->head) {
-    pthread_cond_wait(&jq->empty, &jq->mutex);
+    pthread_cond_wait(&jq->full, &jq->mutex);
   }
 
   free(jq->jobs);

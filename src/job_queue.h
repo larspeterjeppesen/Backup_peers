@@ -15,6 +15,7 @@ typedef struct {
 } job_queue_t;
 
 int job_queue_init(job_queue_t*);
+int job_queue_is_empty(job_queue_t*);
 int job_queue_push(job_queue_t*, void*);
 int job_queue_pop(job_queue_t*, void**);
 int job_queue_destroy(job_queue_t*);

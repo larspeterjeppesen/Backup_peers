@@ -92,6 +92,7 @@ void get_data_sha(const char*, hashdata_t, uint32_t);
 void get_file_sha(const char*, hashdata_t, long);
 int cmp_hash(hashdata_t, hashdata_t);
 void listen_for_connection(char*);
+void signal_terminate_connection(int);
 void init_dir_structure(char*);
 void receive_files(int);
 uint32_t transfer_file(int, char*);

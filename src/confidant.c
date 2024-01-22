@@ -54,11 +54,10 @@ void* worker_send_files(void* s_args) {
               strerror(errno));
       break;
     }
-    printf("Sending %s to transfer_file\n", path);
     transfer_file(args->connfd, path); 
     free(path);
   }
-
+  signal_terminate_connection(args->connfd); 
   return NULL;
 }
 
@@ -71,7 +70,6 @@ uint64_t get_last_time_modified(char* filename) {
 
 //Depth-first traversal of a directory
 void push_files_in_dir(job_queue_t* jq, char* dir) {
-  printf("%s\n", dir);
   DIR* dir_p = opendir(dir);
   if (!dir_p) {
     fprintf(stderr, "Could not open dir %s\n", dir);
@@ -102,12 +100,12 @@ void push_files_in_dir(job_queue_t* jq, char* dir) {
 //Traverse phone directory for files to send
 void* worker_push_files_for_transfer(void* arg) {
   PusherArgs_t* args = (PusherArgs_t*) arg;
-  push_files_in_dir(args->jq, args->root_dir); 
+  push_files_in_dir(args->jq, args->root_dir);
+  job_queue_destroy(args->jq); //waits until empty
   return NULL; 
 }
 
 int main(int argc, char** argv) {
-  char file_path[PATH_LEN];
   char self_port[PORT_LEN];
   char target_ip[IP_LEN];
   char target_port[PORT_LEN];
@@ -182,7 +180,6 @@ int main(int argc, char** argv) {
     pthread_create(&receiver_tid, NULL, worker_receive_files, (void*)&self_port);
   }
 
-  printf("%s\n", root_dir); 
   PusherArgs_t p_args;
   SenderArgs_t s_args;
 
@@ -200,9 +197,9 @@ int main(int argc, char** argv) {
     pthread_join(receiver_tid, NULL);
   }
   if (sender) {
-    close(s_args.connfd);
     pthread_join(pusher_tid, NULL);
     pthread_join(sender_tid, NULL);
+    close(s_args.connfd);
   }
 
   
