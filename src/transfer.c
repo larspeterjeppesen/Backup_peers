@@ -229,6 +229,7 @@ uint32_t transfer_file(int connfd, char* file_path) {
   fstat(fd, &statbuf);
   uint64_t file_size = statbuf.st_size;
   close(fd);
+
   //FileData header data
   file_data.path_len = htonl((uint32_t)strlen(file_path));
   uint32_t block_count = ceil((double)file_size/(double)(PACKAGE_PAYLOAD_LEN));
@@ -236,7 +237,6 @@ uint32_t transfer_file(int connfd, char* file_path) {
   file_data.file_size = htobe64(file_size); 
   get_file_sha(file_path, file_data.file_hash, file_size); 
   strcpy(file_data.file_path, file_path);
- 
   char send_buf[MAX_MSG_LEN];
   memcpy(send_buf, &file_data.path_len, 4);
   memcpy(send_buf+4, &file_data.block_count, 4);
@@ -252,7 +252,6 @@ uint32_t transfer_file(int connfd, char* file_path) {
   char response_buf[MAX_MSG_LEN];
   io_assist_state_t state;
   io_assist_readinitb(&state, connfd);  
-  
   ssize_t n = io_assist_readnb(&state, response_buf, RESPONSE_LEN);
 
   uint32_t response = ntohl(*(uint32_t*)response_buf);
@@ -265,7 +264,6 @@ uint32_t transfer_file(int connfd, char* file_path) {
   } else {
     if (t_verbose) fprintf(stdout, "Transfer request accepted, starting transfer\n");
   }
-
   //Transfer actual file
   FILE* fp = fopen(file_path, "r");
   char read_buf[PACKAGE_PAYLOAD_LEN];
@@ -289,7 +287,6 @@ uint32_t transfer_file(int connfd, char* file_path) {
     io_assist_writen(connfd, msg_buf, PACKAGE_HEADER_LEN+n);
   }
   fclose(fp);
-
   //Read response from receiver
   io_assist_readnb(&state, response_buf, RESPONSE_LEN);
   response = ntohl(*(uint32_t*)response_buf);
